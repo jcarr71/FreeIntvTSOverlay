@@ -39,8 +39,11 @@ Overlay PNG files provide custom graphics for the keypad and utility buttons.
 ---
 
 ## Touchscreen UI
+
+## Touchscreen & Mouse Support
 - On Android, touch the keypad area to send input to the emulator.
-- Utility button (Swap Screen) are available below the game screen.
+- On Windows and Linux, you can use the mouse to click on the keypad overlay and utility buttons. Mouse clicks are mapped to touch events, allowing full use of the overlay UI features.
+- Utility button (Swap Screen) is available below the game screen.
 - The "Swap Screen" button toggles the position of the game and keypad overlays.
 
 ---
