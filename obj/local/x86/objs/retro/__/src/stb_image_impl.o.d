@@ -1,4 +1,4 @@
-S:/VisualStudio/FreeIntvTSOverlay/obj/local/x86/objs/retro/__/src/stb_image_impl.o: \
-  S:/VisualStudio/FreeIntvTSOverlay/jni/../src/stb_image_impl.c \
-  S:/VisualStudio/FreeIntvTSOverlay/jni/../src/stb_image.h
-S:/VisualStudio/FreeIntvTSOverlay/jni/../src/stb_image.h:
+s:/VisualStudio/FreeIntvTSOverlay/obj/local/x86/objs/retro/__/src/stb_image_impl.o: \
+  s:/VisualStudio/FreeIntvTSOverlay/jni/../src/stb_image_impl.c \
+  s:/VisualStudio/FreeIntvTSOverlay/jni/../src/stb_image.h
+s:/VisualStudio/FreeIntvTSOverlay/jni/../src/stb_image.h:

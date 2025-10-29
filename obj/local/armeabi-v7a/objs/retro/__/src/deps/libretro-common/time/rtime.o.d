@@ -1,6 +1,6 @@
-S:/VisualStudio/FreeIntvTSOverlay/obj/local/armeabi-v7a/objs/retro/__/src/deps/libretro-common/time/rtime.o: \
-  S:/VisualStudio/FreeIntvTSOverlay/jni/../src/deps/libretro-common/time/rtime.c \
-  S:/VisualStudio/FreeIntvTSOverlay/jni/../src/deps/libretro-common/include/time/rtime.h \
-  S:/VisualStudio/FreeIntvTSOverlay/jni/../src/deps/libretro-common/include/retro_common_api.h
-S:/VisualStudio/FreeIntvTSOverlay/jni/../src/deps/libretro-common/include/time/rtime.h:
-S:/VisualStudio/FreeIntvTSOverlay/jni/../src/deps/libretro-common/include/retro_common_api.h:
+s:/VisualStudio/FreeIntvTSOverlay/obj/local/armeabi-v7a/objs/retro/__/src/deps/libretro-common/time/rtime.o: \
+  s:/VisualStudio/FreeIntvTSOverlay/jni/../src/deps/libretro-common/time/rtime.c \
+  s:/VisualStudio/FreeIntvTSOverlay/jni/../src/deps/libretro-common/include/time/rtime.h \
+  s:/VisualStudio/FreeIntvTSOverlay/jni/../src/deps/libretro-common/include/retro_common_api.h
+s:/VisualStudio/FreeIntvTSOverlay/jni/../src/deps/libretro-common/include/time/rtime.h:
+s:/VisualStudio/FreeIntvTSOverlay/jni/../src/deps/libretro-common/include/retro_common_api.h:

@@ -1,8 +1,8 @@
-S:/VisualStudio/FreeIntvTSOverlay/obj/local/riscv64/objs/retro/__/src/cart.o: \
-  S:/VisualStudio/FreeIntvTSOverlay/jni/../src/cart.c \
-  S:/VisualStudio/FreeIntvTSOverlay/jni/../src/memory.h \
-  S:/VisualStudio/FreeIntvTSOverlay/jni/../src/cart.h \
-  S:/VisualStudio/FreeIntvTSOverlay/jni/../src/osd.h
-S:/VisualStudio/FreeIntvTSOverlay/jni/../src/memory.h:
-S:/VisualStudio/FreeIntvTSOverlay/jni/../src/cart.h:
-S:/VisualStudio/FreeIntvTSOverlay/jni/../src/osd.h:
+s:/VisualStudio/FreeIntvTSOverlay/obj/local/riscv64/objs/retro/__/src/cart.o: \
+  s:/VisualStudio/FreeIntvTSOverlay/jni/../src/cart.c \
+  s:/VisualStudio/FreeIntvTSOverlay/jni/../src/memory.h \
+  s:/VisualStudio/FreeIntvTSOverlay/jni/../src/cart.h \
+  s:/VisualStudio/FreeIntvTSOverlay/jni/../src/osd.h
+s:/VisualStudio/FreeIntvTSOverlay/jni/../src/memory.h:
+s:/VisualStudio/FreeIntvTSOverlay/jni/../src/cart.h:
+s:/VisualStudio/FreeIntvTSOverlay/jni/../src/osd.h:
