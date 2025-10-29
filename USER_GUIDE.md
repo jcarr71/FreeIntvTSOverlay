@@ -32,11 +32,29 @@ Overlay PNG files provide custom graphics for the keypad and utility buttons.
 
 
 ### Where to Place Overlay PNG Files
-- Place your overlay PNG files in the RetroArch `system` directory under the folder `FreeIntvTS_Overlays`:
    - Example: `retroarch/system/FreeIntvTS_Overlays/`
-- Ensure the PNG filename matches the ROM filename (excluding extension).
 
----
+
+## Download Core Assets
+
+You will need to download two separate ZIP files:
+
+1. **Controller Templates & Buttons:**
+   - [FreeTS_Overlay Core Assets.zip](https://github.com/jcarr71/FreeIntvTSOverlay/releases/latest/download/FreeTS_Overlay_Core_Assets.zip)
+   - This contains the controller template, default keypad, and utility button PNGs.
+
+2. **Overlay PNGs:**
+   - [Overlays.zip](https://github.com/jcarr71/FreeIntvTSOverlay/releases/latest/download/Overlays.zip)
+   - This contains the actual overlays for individual games.
+
+**Installation Instructions:**
+1. Download both ZIP files from the links above.
+2. Unzip the contents of each ZIP file.
+3. Copy all files and folders from both ZIPs into your `retroarch\system` directory.
+   - The overlays should end up in `retroarch\system\FreeIntvTS_Overlays`.
+4. Restart RetroArch if it is running.
+
+Your overlays and assets will now be available for use with the FreeIntvTSOverlay core.
 
 ## Touchscreen UI
 
