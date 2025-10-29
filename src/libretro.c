@@ -132,8 +132,6 @@ static int display_swap = 0;  // 0 = game left/keypad right, 1 = game right/keyp
 
 // Hotspot input tracking
 static int hotspot_pressed[OVERLAY_HOTSPOT_COUNT] = {0};  // Track which hotspots are currently pressed
-static int hotspot_hold_frames[OVERLAY_HOTSPOT_COUNT] = {0};  // Hold button presses for multiple frames
-#define BUTTON_HOLD_FRAMES 3  // Minimum frames to keep button active after touch ends
 
 // Utility button input tracking
 static int utility_button_pressed[UTILITY_BUTTON_COUNT] = {0};  // Track which buttons are currently pressed
@@ -1070,7 +1068,6 @@ static void process_hotspot_input(void)
             {
                 // Button press detected - send keypad code
                 hotspot_pressed[i] = 1;
-                hotspot_hold_frames[i] = BUTTON_HOLD_FRAMES;  // Start hold counter
                 debug_log("[HOTSPOT_PRESS] Button %d (idx=%d) pressed at (%d,%d) code=0x%02X",
                           i, i, mouse_x, mouse_y, h->keypad_code);
             }
@@ -1090,15 +1087,12 @@ static void process_hotspot_input(void)
     int hotspot_input = 0;
     for (int i = 0; i < OVERLAY_HOTSPOT_COUNT; i++)
     {
-        // Keep button active if currently pressed OR if hold counter is active
-        if (hotspot_pressed[i] || hotspot_hold_frames[i] > 0)
+        // Send hotspot input if currently pressed
+        if (hotspot_pressed[i])
         {
             hotspot_input |= overlay_hotspots[i].keypad_code;
-            if (hotspot_hold_frames[i] > 0) {
-                hotspot_hold_frames[i]--;
-            }
-            debug_log("[HOTSPOT_COMBINE] Button %d: code=0x%02X, combined=0x%02X, hold_frames=%d",
-                      i, overlay_hotspots[i].keypad_code, hotspot_input, hotspot_hold_frames[i]);
+            debug_log("[HOTSPOT_COMBINE] Button %d: code=0x%02X, combined=0x%02X",
+                      i, overlay_hotspots[i].keypad_code, hotspot_input);
         }
     }
     
