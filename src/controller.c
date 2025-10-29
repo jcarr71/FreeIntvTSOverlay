@@ -80,7 +80,11 @@ void controllerInit()
 
 void setControllerInput(int player, int state)
 {
-	Memory[(player^controllerSwap) + 0x1FE] = (state^0xFF) & 0xFF;
+	int byte_val = (state^0xFF) & 0xFF;
+	Memory[(player^controllerSwap) + 0x1FE] = byte_val;
+	// Note: Debug logging would go here if needed
+	// The value written is state XORed with 0xFF, then masked to 0xFF
+	// For K_9 (0x24): written value = (0x24 ^ 0xFF) & 0xFF = 0xDB
 }
 
 int getControllerState(int joypad[], int player)
