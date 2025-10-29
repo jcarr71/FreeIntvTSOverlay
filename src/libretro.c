@@ -276,9 +276,9 @@ static void build_system_overlay_path(char* out_path, size_t out_size, const cha
     int has_trailing_sep = (last_char == '/' || last_char == '\\');
     
     if (has_trailing_sep) {
-        snprintf(out_path, out_size, "%sfreeintvds-overlays%c%s", system_dir, sep, filename);
+        snprintf(out_path, out_size, "%sFreeIntvTS_Overlays%c%s", system_dir, sep, filename);
     } else {
-        snprintf(out_path, out_size, "%s%cfreeintvds-overlays%c%s", system_dir, sep, sep, filename);
+        snprintf(out_path, out_size, "%s%cFreeIntvTS_Overlays%c%s", system_dir, sep, sep, filename);
     }
     
     printf("[DEBUG] Built overlay path: %s\n", out_path);
@@ -441,7 +441,7 @@ static void build_overlay_path(const char* rom_path, char* overlay_path, size_t 
     // Detect path separator based on system_dir content
     char sep = strchr(system_dir, '/') ? '/' : '\\';
     snprintf(overlay_path, overlay_path_size, 
-             "%s%cfreeintvds-overlays%c%.*s.png",
+             "%s%cFreeIntvTS_Overlays%c%.*s.png",
              system_dir, sep, sep, (int)name_len, filename);
     printf("[DEBUG] ROM overlay path (sep=%c): %s\n", sep, overlay_path);
 }

@@ -3,12 +3,6 @@ FreeIntv is a libretro emulation core for the Mattel Intellivision designed to b
 
 **Current Version**: Enhanced with full touchscreen support for Android devices (October 24, 2025)
 
-## Quick Links
-
-- 📱 **[Touchscreen Implementation Guide](TOUCHSCREEN_IMPLEMENTATION_GUIDE.md)** - Complete feature documentation
-- 🚀 **[Android Deployment Guide](ANDROID_INSTALL_GUIDE.md)** - Build and install instructions
-- 📋 **[Documentation Status](DOCUMENTATION_STATUS.md)** - Current documentation state
-
 ## Authors & Contributors
 
 FreeIntv was created by David Richardson.
@@ -16,7 +10,7 @@ The PSG and STIC emulation was made closer to hardware and optimized by Oscar To
 
 The Intellivoice code has been contributed by Joe Zbiciak (author of jzintv), and adapted by Oscar Toledo G. (nanochess)
 
-**Touchscreen Enhancement**: Android touchscreen keypad and utility button implementation (October 2025)
+**Touchscreen Enhancement**: Android touchscreen keypad and utility button implementation (October 2025) by Jason Carr
 
 ## License
 The FreeIntv core is licensed under GPLv2+. More information at https://github.com/libretro/FreeIntv/blob/master/LICENSE
@@ -35,7 +29,16 @@ FreeIntv requires two Intellivision BIOS files to be placed in the libretro 'sys
 FreeIntv does not currently support Entertainment Computer System (ECS) functionality. Contributions to the code are welcome!
 
 ## Controller overlays
+
 Mattel Intellivision games were often meant to be played with game-specific cards overlaid on the numeric keypad. These overlays convey information which can be very useful in gameplay. Images of a limited selection of Intellivision titles are available at: http://www.intellivisionlives.com/bluesky/games/instructions.shtml
+
+### Overlay PNG Files (Touchscreen)
+To use custom keypad and utility overlays with the touchscreen UI, place your PNG files in the following directory:
+
+  retroarch/system/FreeIntvTS_Overlays/
+
+Recommended naming: `keypad_overlay.png`, `utility_overlay.png`, or match the ROM filename (e.g., `game1_overlay.png`).
+For per-game overlays, ensure the PNG filename matches the ROM filename (excluding extension).
 
 ## Controls
 
@@ -46,10 +49,7 @@ Mattel Intellivision games were often meant to be played with game-specific card
 ### Android Touchscreen Controls *(New)*
 * **Touchscreen Keypad** - Touch any of the 12 buttons (1-9, *, 0, #) on the right side of the screen to input commands directly
 * **Utility Buttons** - Quick access buttons below the game screen:
-  - **Menu** - Access pause/menu (placeholder - tap to activate)
-  - **Quit** - Exit game (placeholder)
   - **Swap Screen** - Toggle game/keypad positions (fully implemented)
-  - **Save/Load/Screenshot** - State management buttons (placeholders)
 * **Visual Feedback** - Button presses show green highlighting on keypad buttons, yellow on utility buttons
 
 ### RetroPad Mapping
