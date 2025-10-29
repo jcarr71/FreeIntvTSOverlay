@@ -37,8 +37,17 @@ To use custom keypad and utility overlays with the touchscreen UI, place your PN
 
   retroarch/system/FreeIntvTS_Overlays/
 
-Recommended naming: `keypad_overlay.png`, `utility_overlay.png`, or match the ROM filename (e.g., `game1_overlay.png`).
-For per-game overlays, ensure the PNG filename matches the ROM filename (excluding extension).
+Recommended naming: ensure the PNG filename matches the ROM filename (excluding extension).
+### Overlay PNG Files (Touchscreen & Mouse)
+To use custom keypad and utility overlays with the touchscreen UI, place your PNG files in the following directory:
+
+  retroarch/system/FreeIntvTS_Overlays/
+
+Recommended naming: ensure the PNG filename matches the ROM filename (excluding extension).
+
+#### Touch and Mouse Input
+- On Android, touch the keypad and utility buttons directly.
+- On Windows and Linux, you can use the mouse to click on the keypad overlay and utility buttons. Mouse clicks are mapped to touch events, enabling full overlay UI functionality.
 
 ## Controls
 
