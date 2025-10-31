@@ -37,22 +37,48 @@ FreeIntv does not currently support Entertainment Computer System (ECS) function
 Mattel Intellivision games were often meant to be played with game-specific cards overlaid on the numeric keypad. These overlays convey information which can be very useful in gameplay. Images of a limited selection of Intellivision titles are available at: http://www.intellivisionlives.com/bluesky/games/instructions.shtml
 
 ### Overlay PNG Files (Touchscreen)
-To use custom keypad and utility overlays with the touchscreen UI, you need to download two separate ZIP files:
+To use custom keypad and utility overlays with the touchscreen UI, download the required asset files:
 
-1. **Controller Templates & Buttons:**
-  - [FreeTS_Overlay Core Assets.zip](https://github.com/jcarr71/FreeIntvTSOverlay/releases/latest/download/FreeTS_Overlay_Core_Assets.zip)
-  - This contains the controller template, default keypad, and utility button PNGs.
+1. **Compiled Core Library:**
+  - [FreeIntvTSOverlay_libretro.zip](Assets/FreeIntvTSOverlay_libretro.zip)
+  - Pre-compiled core binaries for all platforms (Windows DLL, Linux SO, etc.)
 
-2. **Overlay PNGs:**
-  - [Overlays.zip](https://github.com/jcarr71/FreeIntvTSOverlay/releases/latest/download/Overlays.zip)
-  - This contains the actual overlays for individual games.
+2. **Controller Templates & Buttons:**
+  - [FreeIntvTS_Overlay Core Assets.zip](Assets/FreeIntvTS_Overlay%20Core%20Assets.zip)
+  - Contains the controller template, default keypad, and utility button PNGs.
+
+3. **Overlay PNGs:**
+  - [Overlays.zip](Assets/Overlays.zip)
+  - Contains the actual overlays for individual games.
 
 **Installation Instructions:**
-1. Download both ZIP files from the links above.
-2. Unzip the contents of each ZIP file.
-3. Copy all files and folders from both ZIPs into your `retroarch/system` directory.
-  - The overlays should end up in `retroarch/system/FreeIntvTS_Overlays`.
-4. Restart RetroArch if it is running.
+
+**Step 1: Download the ZIP files**
+- Download all 3 ZIP files from the links above.
+
+**Step 2: Extract and Organize Files**
+- Extract `FreeIntvTSOverlay_libretro.zip` → Contains core binaries and `.info` file
+- Extract `FreeIntvTS_Overlay Core Assets.zip` → Contains controller template and default keypad
+- Extract `Overlays.zip` → Contains game-specific overlays
+
+**Step 3: Install Core Binary**
+- Place the core file for your platform into: `RetroArch/cores/`
+  - Windows: `FreeIntvTSOverlay_libretro.dll`
+  - Linux: `FreeIntvTSOverlay_libretro.so`
+  - macOS: `FreeIntvTSOverlay_libretro.dylib`
+- ⚠️ **Important:** If the core filename includes a platform identifier in brackets like `[Windows]FreeIntvTSOverlay_libretro.dll`, remove the brackets and platform name so it matches the info file: `FreeIntvTSOverlay_libretro.dll`
+
+**Step 4: Install Info File**
+- Copy `FreeIntvTSOverlay_libretro.info` to: `RetroArch/info/`
+- ⚠️ **Important:** The info filename must match the core filename exactly (excluding file extension)
+
+**Step 5: Install Overlays**
+- Copy all files from both extracted archives to: `RetroArch/system/FreeIntvTS_Overlays/`
+  - Game overlays should be named to match your ROM files (e.g., `Astrosmash.png`)
+
+**Step 6: Refresh RetroArch**
+- Delete RetroArch's info cache (usually in `RetroArch/system/` or config folder)
+- Restart RetroArch to load the new core  
 
 Recommended naming: ensure the PNG filename matches the ROM filename (excluding extension).
 ### Overlay PNG Files (Touchscreen & Mouse)
@@ -69,7 +95,6 @@ Recommended naming: ensure the PNG filename matches the ROM filename (excluding 
 ## Controls
 
 ### Traditional Gamepad Controls
-* **Mini-Keypad** - allows the user to view and select keys from a small Intellivision pad in the lower corner of the display.
 * **Controller Swap** - Some Intellivision games expect the left controller to be player one, others expect the right controller. This isn't a problem if you have two controllers (and don't mind juggling them) but users with only one controller or using a portable setup would be effectively locked out of some games. Controller Swap swaps the two controller interfaces so that the player does not have to physically swap controllers.
 
 ### Android Touchscreen Controls *(New)*
