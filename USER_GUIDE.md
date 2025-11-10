@@ -17,13 +17,29 @@ FreeIntvTSOverlay is a libretro core for emulating the Mattel Intellivision, fea
 ## Installation
 1. **Install RetroArch**
    - Download from https://www.retroarch.com/
-2. **Install FreeIntvTSOverlay Core**
-   - Place the core file in RetroArch's `cores` directory
-   - Load the core via RetroArch's "Load Core" menu
+
+2. **Install FreeIntvTSOverlay Core & Info file**
+   - Place the core binary for your platform into RetroArch's `cores` directory:
+     - Windows: `FreeIntvTSOverlay_libretro.dll`
+     - Linux: `FreeIntvTSOverlay_libretro.so`
+     - macOS: `FreeIntvTSOverlay_libretro.dylib`
+   - Important: Ensure the core filename is exactly `FreeIntvTSOverlay_libretro.*` (remove any extra platform tags or brackets added by ZIP extractors).
+   - Copy the `.info` file to RetroArch's `info` folder (this lets RetroArch associate ROM extensions with the core):
+     - Example path (Windows): `%APPDATA%\RetroArch\info\FreeIntvTSOverlay_libretro.info`
+     - If RetroArch places info files elsewhere on your platform, copy it to that `info/` folder.
+
 3. **Add BIOS Files**
-   - Place `exec.bin` and `grom.bin` in the `system` folder inside your RetroArch directory
+   - Place `exec.bin` and `grom.bin` in the RetroArch `system` folder. Filenames are case-sensitive.
+   - Example (PowerShell):
+```powershell
+Copy-Item .\exec.bin C:\retroarch-win64\system\exec.bin -Force
+Copy-Item .\grom.bin C:\retroarch-win64\system\grom.bin -Force
+```
+
 4. **Add Game ROMs**
-   - Place Intellivision ROM files in your preferred ROMs directory
+   - Place Intellivision ROM files in your preferred ROMs directory (e.g. `retroarch/roms/intellivision/`).
+   - Supported extensions: `.intv`, `.bin`, `.rom` (the core advertises `intv|bin|rom`).
+   - If RetroArch prompts which core to use when loading a ROM, it means the `.info` file wasn't recognized; see "Refreshing RetroArch core info" below.
 
 ---
 
@@ -32,7 +48,23 @@ Overlay PNG files provide custom graphics for the keypad and utility buttons.
 
 
 ### Where to Place Overlay PNG Files
-   - Example: `retroarch/system/FreeIntvTS_Overlays/`
+   - Place overlays and core assets into the RetroArch `system` folder under the `FreeIntvTS_Overlays` subfolder. Example:
+     - `retroarch/system/FreeIntvTS_Overlays/`
+   - Copy both the controller/template asset ZIP and the overlays ZIP contents into the same folder so default keypad and utility button PNGs are available.
+
+### Naming and ROM-specific overlays
+   - Recommended: name the PNG to match the ROM filename (without extension). Example:
+     - ROM: `4-tris.rom` → Overlay: `4-tris.png`
+
+### Refreshing RetroArch core info and overlays
+   - RetroArch caches core info and will only list ROM extensions that match the `.info` file for a core. If you install a new core or update its `.info` file, do the following:
+     - Exit RetroArch fully.
+     - Delete RetroArch's info/core cache (paths vary by platform). On desktop installs you may find an `info/` cache under the RetroArch config directory (or `config/.retroarch/`).
+     - On Android the core info lives under the RetroArch app data (for example `/data/data/com.retroarch/files/.retroarch/cores/`). Remove or replace the `FreeIntvTSOverlay_libretro.info` there and restart RetroArch.
+   - If RetroArch still prompts for a core when opening a ROM, the `.info` file didn't get picked up. Re-copy the `.info` file to RetroArch's `info/` or `cores/` location and restart RetroArch.
+
+### Optional: create a small ROM database (.rdb)
+   - RetroArch uses system ROM databases to enrich playlists and sometimes to help with filtering. You can add a minimal `.rdb` for convenience; place it in RetroArch's `database/rdb/` folder.
 
 
 ## Download Core Assets
@@ -70,6 +102,29 @@ Your overlays and assets will now be available for use with the FreeIntvTSOverla
 - If overlays do not appear, verify PNG file location and naming.
 - Ensure BIOS files are present in the `system` folder.
 - For touchscreen issues, check RetroArch input settings and core options.
+
+### If RetroArch asks which core to use when opening a ROM
+ - This means the `.info` file for the core is not recognized by RetroArch (or cached metadata is stale).
+ - Steps to resolve:
+    1. Make sure the `FreeIntvTSOverlay_libretro.info` file is copied into RetroArch's `info/` folder, and that the filename matches the core filename (excluding extension).
+    2. Fully quit RetroArch and restart it to force a rescan.
+    3. If needed, delete RetroArch's info cache (desktop: `info/` or config cache; Android: app data `.retroarch/cores/`) and restart.
+    4. Rebuild playlists or use "Load Core" first, then "Load Content" and navigate to the ROM.
+
+### Android-specific deployment notes
+ - Place the correct `libFreeIntvTSOverlay.so` for your device ABI into the RetroArch cores directory on the device.
+    - Example install via ADB (replace ABI path and device paths as needed):
+```bash
+adb push libs/arm64-v8a/libFreeIntvTSOverlay.so /sdcard/Download/
+# then move the file on-device with a file manager or via shell to the RetroArch cores location
+adb shell "su -c 'mv /sdcard/Download/libFreeIntvTSOverlay.so /data/data/com.retroarch/files/.retroarch/cores/'"
+```
+ - Also ensure the `.info` file is present on the device under RetroArch's info/core cache so Android's file browser can filter `.intv|.bin|.rom` properly.
+
+### If the core crashes on load
+ - Verify you used the correct ABI binary for your device (arm64-v8a vs armeabi-v7a vs x86/x86_64).
+ - Make sure the BIOS files (`exec.bin`, `grom.bin`) are present and readable.
+ - Check RetroArch logs (logcat on Android or retroarch.log on desktop) to see why the core failed.
 
 ---
 
