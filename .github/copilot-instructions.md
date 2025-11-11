@@ -1,8 +1,8 @@
-# FreeIntvTSOverlay with Android Touchscreen Support - AI Agent Instructions
+# FreeIntv with Android Touchscreen Support - AI Agent Instructions
 
 ## Project Overview
 
-FreeIntvTSOverlay is a libretro emulation core for the Mattel Intellivision with full Android touchscreen support, macOS/Windows mouse support, and Linux pointer support. The codebase is C-based (no external dependencies beyond libretro-common) and runs on 10+ platforms via libretro framework.
+FreeIntv is a libretro emulation core for the Mattel Intellivision with full Android touchscreen support, macOS/Windows mouse support, and Linux pointer support. The codebase is C-based (no external dependencies beyond libretro-common) and runs on 10+ platforms via libretro framework.
 
 **Key Architecture**: Libretro plugin core → RetroArch frontend. Dual-screen rendering displays 352×224 game output (2x scaled) alongside an interactive 370×600 keypad overlay on a 1074×600 canvas.
 
@@ -36,7 +36,7 @@ FreeIntvTSOverlay is a libretro emulation core for the Mattel Intellivision with
 - `controller_base.png`: Keypad template layer
 - `{rom_name}.png`: Game-specific overlay (fallback to `default.png`)
 - `{button_name}.png`: Utility button images (only button 2 loaded currently)
-- Located in `RetroArch/system/FreeIntvTS_Overlays/`
+- Located in `RetroArch/system/FreeIntv_image_assets/`
 
 ### 3. **Touchscreen Input** (Android-specific, pointer input on desktop)
 **Data flow**: RetroArch pointer callback → `process_hotspot_input()` and `process_utility_button_input()` → controller memory updates
@@ -89,7 +89,7 @@ ndk-build -C jni/         # Android (requires NDK)
 make -C jni/              # Alternative Android build
 ```
 
-**Output**: `freeintvtsoverlay_libretro.{so|dll|dylib}` in repo root
+**Output**: `freeintv_libretro.{so|dll|dylib}` in repo root
 
 ### Testing Locally
 1. **Get BIOS**: Place `exec.bin` and `grom.bin` (case-sensitive) in RetroArch `system/` folder
@@ -240,9 +240,9 @@ Video() is called with:
 ## Build & Deploy
 
 - **Local testing**: Build with `make platform=unix` (or `platform=win`), copy core to RetroArch `cores/`, load BIOS/ROM
-- **Libretro upstream**: Sync changes to https://github.com/libretro/FreeIntv (original) or https://github.com/jcarr71/FreeIntvTSOverlay (fork with touchscreen)
-- **Core distribution**: Packaged as `freeintvtsoverlay_libretro.{so|dll|dylib}` + `FreeIntvTSOverlay_libretro.info`
-- **Asset distribution**: PNG files in `RetroArch/system/FreeIntvTS_Overlays/` folder
+- **Libretro upstream**: Sync changes to https://github.com/libretro/FreeIntv
+- **Core distribution**: Packaged as `freeintv_libretro.{so|dll|dylib}` + `FreeIntv_libretro.info`
+- **Asset distribution**: PNG files in `RetroArch/system/FreeIntv_image_assets/` folder
 
 ---
 

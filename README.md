@@ -40,11 +40,11 @@ Mattel Intellivision games were often meant to be played with game-specific card
 To use custom keypad and utility overlays with the touchscreen UI, download the required asset files:
 
 1. **Compiled Core Library:**
-  - [FreeIntvTSOverlay_libretro.zip](Assets/FreeIntvTSOverlay_libretro.zip)
+  - [FreeIntv_libretro.zip](Assets/FreeIntv_libretro.zip)
   - Pre-compiled core binaries for all platforms (Windows DLL, Linux SO, etc.)
 
 2. **Controller Templates & Buttons:**
-  - [FreeIntvTS_Overlay Core Assets.zip](Assets/FreeIntvTS_Overlay%20Core%20Assets.zip)
+  - [FreeIntv Core Assets.zip](Assets/FreeIntv%20Core%20Assets.zip)
   - Contains the controller template, default keypad, and utility button PNGs.
 
 3. **Overlay PNGs:**
@@ -57,24 +57,31 @@ To use custom keypad and utility overlays with the touchscreen UI, download the 
 - Download all 3 ZIP files from the links above.
 
 **Step 2: Extract and Organize Files**
-- Extract `FreeIntvTSOverlay_libretro.zip` → Contains core binaries and `.info` file
-- Extract `FreeIntvTS_Overlay Core Assets.zip` → Contains controller template and default keypad
+- Extract `FreeIntv_libretro.zip` → Contains core binaries and `.info` file
+- Extract `FreeIntv Core Assets.zip` → Contains controller template and default keypad
 - Extract `Overlays.zip` → Contains game-specific overlays
 
 **Step 3: Install Core Binary**
 - Place the core file for your platform into: `RetroArch/cores/`
-  - Windows: `FreeIntvTSOverlay_libretro.dll`
-  - Linux: `FreeIntvTSOverlay_libretro.so`
-  - macOS: `FreeIntvTSOverlay_libretro.dylib`
-- ⚠️ **Important:** If the core filename includes a platform identifier in brackets like `[Windows]FreeIntvTSOverlay_libretro.dll`, remove the brackets and platform name so it matches the info file: `FreeIntvTSOverlay_libretro.dll`
+  - Windows: `FreeIntv_libretro.dll`
+  - Linux: `FreeIntv_libretro.so`
+  - macOS: `FreeIntv_libretro.dylib`
+- ⚠️ **Important:** If the core filename includes a platform identifier in brackets like `[Windows]FreeIntv_libretro.dll`, remove the brackets and platform name so it matches the info file: `FreeIntv_libretro.dll`
 
 **Step 4: Install Info File**
-- Copy `FreeIntvTSOverlay_libretro.info` to: `RetroArch/info/`
+- Copy `FreeIntv_libretro.info` to: `RetroArch/info/`
 - ⚠️ **Important:** The info filename must match the core filename exactly (excluding file extension)
 
 **Step 5: Install Overlays**
-- Copy all files from both extracted archives to: `RetroArch/system/FreeIntvTS_Overlays/`
+- Copy all files from both extracted archives to: `RetroArch/system/FreeIntv_image_assets/`
   - Game overlays should be named to match your ROM files (e.g., `Astrosmash.png`)
+  - Required utility button PNG files:
+    - `button_swapscreen.png` - Swaps game and keypad positions in dual-screen mode
+    - `button_full_screen_toggle.png` - Toggles fullscreen mode
+    - `button_full_screen_overlay.png` - Toggles overlay visibility in fullscreen mode
+  - Required controller template PNG files:
+    - `controller_base.png` - Base keypad template layer
+    - `default.png` - Default overlay if ROM-specific overlay not found
 
 **Step 6: Refresh RetroArch**
 - Delete RetroArch's info cache (usually in `RetroArch/system/` or config folder)
@@ -84,7 +91,7 @@ Recommended naming: ensure the PNG filename matches the ROM filename (excluding 
 ### Overlay PNG Files (Touchscreen & Mouse)
 To use custom keypad and utility overlays with the touchscreen UI, place your PNG files in the following directory:
 
-  retroarch/system/FreeIntvTS_Overlays/
+  retroarch/system/FreeIntv_image_assets/
 
 Recommended naming: ensure the PNG filename matches the ROM filename (excluding extension).
 
