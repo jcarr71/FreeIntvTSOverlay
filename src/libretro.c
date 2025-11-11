@@ -77,9 +77,14 @@
 #define RETROARCH_SCREENSHOT 1008
 #define RETROARCH_TOGGLE_DISPLAY 1009
 
-#define UTILITY_BUTTON_COUNT 6
+#define UTILITY_BUTTON_COUNT 7  // Increased from 6 to include fullscreen button
 #define MENU_BUTTON_WIDTH 200
 #define MENU_BUTTON_HEIGHT 50
+
+// Fullscreen mode constants
+#define FULLSCREEN_STRIP_HEIGHT 50   // Height of bottom auto-hide strip in fullscreen
+#define FULLSCREEN_HIDE_DELAY 300    // Frames before auto-hiding (300 frames @ 60fps = 5 seconds)
+#define FULLSCREEN_TOUCH_ZONE 80     // Touch area from bottom to reveal strip (pixels)
 
 // NOTE: Keypad codes are defined in controller.c - DO NOT redefine here!
 // Using correct codes from controller.c:
@@ -108,19 +113,19 @@ typedef struct {
 overlay_hotspot_t overlay_hotspots[OVERLAY_HOTSPOT_COUNT];
 
 // Utility buttons positioned in 704×152 utility workspace (below game screen)
-// Layout: 2 rows × 3 columns, menu_button.png placeholders (200×50 each)
+// Layout: 2 rows × 4 columns, menu_button.png placeholders (200×50 each)
 // Available space: X=0-704 (704px = same as game width), Y=448-600 (152px height)
-// Evenly distributed with 5px gaps: 3*200 + 2*5 = 610px, margins = (704-610)/2 = 47px
-// Vertically: 2*50 + 1*5 = 105px, margins = (152-105)/2 = 23.5px
+// Note: Not all buttons are rendered/loaded - see render_dual_screen() for enabled buttons
 static utility_button_t utility_buttons[UTILITY_BUTTON_COUNT] = {
-    // Row 1 (Y=471) - 3 buttons with 5px horizontal gaps
-    {44, 471, MENU_BUTTON_WIDTH, MENU_BUTTON_HEIGHT, "Menu", RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO},           // Menu button - command placeholder
-    {249, 471, MENU_BUTTON_WIDTH, MENU_BUTTON_HEIGHT, "Quit", 0},                                              // Quit button - command placeholder
-    {454, 471, MENU_BUTTON_WIDTH, MENU_BUTTON_HEIGHT, "Swap", 0},                                              // Swap button - command placeholder
+    // Row 1 (Y=471) - 4 buttons with 5px horizontal gaps
+    {44, 471, MENU_BUTTON_WIDTH, MENU_BUTTON_HEIGHT, "Menu", RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO},           // Button 0: Menu
+    {249, 471, MENU_BUTTON_WIDTH, MENU_BUTTON_HEIGHT, "Quit", 0},                                              // Button 1: Quit
+    {454, 471, MENU_BUTTON_WIDTH, MENU_BUTTON_HEIGHT, "Swap", 0},                                              // Button 2: Swap Screen
+    {659, 471, MENU_BUTTON_WIDTH, MENU_BUTTON_HEIGHT, "Fullscreen", 0},                                        // Button 3: Fullscreen Toggle
     // Row 2 (Y=526) - 3 buttons with 5px horizontal gaps
-    {44, 526, MENU_BUTTON_WIDTH, MENU_BUTTON_HEIGHT, "Save", 0},                                               // Save button - command placeholder
-    {249, 526, MENU_BUTTON_WIDTH, MENU_BUTTON_HEIGHT, "Load", 0},                                               // Load button - command placeholder
-    {454, 526, MENU_BUTTON_WIDTH, MENU_BUTTON_HEIGHT, "Screenshot", 0}                                          // Screenshot button - command placeholder
+    {44, 526, MENU_BUTTON_WIDTH, MENU_BUTTON_HEIGHT, "Save", 0},                                               // Button 4: Save
+    {249, 526, MENU_BUTTON_WIDTH, MENU_BUTTON_HEIGHT, "Load", 0},                                               // Button 5: Load
+    {454, 526, MENU_BUTTON_WIDTH, MENU_BUTTON_HEIGHT, "Screenshot", 0}                                          // Button 6: Screenshot
 };
 
 // Display system variables
@@ -129,6 +134,11 @@ static void* dual_screen_buffer = NULL;
 static const int GAME_WIDTH = 352;
 static const int GAME_HEIGHT = 224;
 static int display_swap = 0;  // 0 = game left/keypad right, 1 = game right/keypad left
+
+// Fullscreen mode variables
+static int fullscreen_mode = 0;  // 0 = dual screen, 1 = fullscreen game only
+static int fullscreen_strip_visible = 0;  // 1 = show bottom control strip, 0 = hidden
+static int fullscreen_hide_timer = 0;  // Countdown timer for auto-hiding strip
 
 // Hotspot input tracking
 static int hotspot_pressed[OVERLAY_HOTSPOT_COUNT] = {0};  // Track which hotspots are currently pressed
@@ -192,15 +202,17 @@ static struct {
     {NULL, 0, 0, 0},  // Button 0: button_ra_menu.png
     {NULL, 0, 0, 0},  // Button 1: button_quit.png
     {NULL, 0, 0, 0},  // Button 2: button_swapscreen.png
-    {NULL, 0, 0, 0},  // Button 3: button_save.png
-    {NULL, 0, 0, 0},  // Button 4: button_load.png
-    {NULL, 0, 0, 0}   // Button 5: button_screenshot.png
+    {NULL, 0, 0, 0},  // Button 3: button_full_screen_toggle.png
+    {NULL, 0, 0, 0},  // Button 4: button_save.png
+    {NULL, 0, 0, 0},  // Button 5: button_load.png
+    {NULL, 0, 0, 0}   // Button 6: button_screenshot.png
 };
 
 static const char* button_filenames[UTILITY_BUTTON_COUNT] = {
     "button_ra_menu.png",
     "button_quit.png",
     "button_swapscreen.png",
+    "button_full_screen_toggle.png",
     "button_save.png",
     "button_load.png",
     "button_screenshot.png"
@@ -350,9 +362,9 @@ static void load_utility_buttons(void)
     }
     
     for (int i = 0; i < UTILITY_BUTTON_COUNT; i++) {
-        // DISABLED: Only load swap screen button (button 2)
+        // ENABLED: Load button 2 (swap screen) and button 3 (fullscreen toggle)
         // All other utility buttons are disabled
-        if (i != 2) {
+        if (i != 2 && i != 3) {
             // Skip loading for disabled buttons
             continue;
         }
@@ -525,7 +537,7 @@ static void load_overlay_for_rom(const char* rom_path)
 }
 
 
-// Render display with game screen LEFT and keypad RIGHT
+// Render display with game screen LEFT and keypad RIGHT (or fullscreen with auto-hide strip)
 static void render_dual_screen(void)
 {
     if (!dual_screen_enabled) return;
@@ -543,6 +555,132 @@ static void render_dual_screen(void)
         dual_buffer[i] = 0xFF000000;
     }
     
+    // =========================================
+    // FULLSCREEN MODE
+    // =========================================
+    if (fullscreen_mode)
+    {
+        // In fullscreen mode, game takes up entire 1074×600 workspace
+        // Render scaled game to fill the screen
+        int game_height = WORKSPACE_HEIGHT;
+        if (fullscreen_strip_visible) {
+            // Leave room for bottom control strip
+            game_height = WORKSPACE_HEIGHT - FULLSCREEN_STRIP_HEIGHT;
+        }
+        
+        // Scale game to fit available height, maintaining 352:224 aspect ratio
+        // Calculate scaling factor to fill width while maintaining aspect
+        double scale_x = WORKSPACE_WIDTH / (double)GAME_WIDTH;
+        double scale_y = game_height / (double)GAME_HEIGHT;
+        double scale = (scale_x < scale_y) ? scale_x : scale_y;  // Use smaller to fit
+        
+        int scaled_width = (int)(GAME_WIDTH * scale);
+        int scaled_height = (int)(GAME_HEIGHT * scale);
+        int offset_x = (WORKSPACE_WIDTH - scaled_width) / 2;  // Center horizontally
+        int offset_y = 0;  // Align to top
+        
+        // Render scaled game centered in fullscreen
+        for (int y = 0; y < scaled_height && y < game_height; ++y) {
+            int src_y = (int)(y / scale);
+            if (src_y >= GAME_HEIGHT) src_y = GAME_HEIGHT - 1;
+            
+            for (int x = 0; x < scaled_width; ++x) {
+                int src_x = (int)(x / scale);
+                if (src_x >= GAME_WIDTH) src_x = GAME_WIDTH - 1;
+                
+                int workspace_x = offset_x + x;
+                int workspace_y = offset_y + y;
+                
+                if (workspace_x >= 0 && workspace_x < WORKSPACE_WIDTH && 
+                    workspace_y >= 0 && workspace_y < WORKSPACE_HEIGHT) {
+                    dual_buffer[workspace_y * WORKSPACE_WIDTH + workspace_x] = 
+                        frame[src_y * GAME_WIDTH + src_x];
+                }
+            }
+        }
+        
+        // Draw auto-hide strip at bottom if visible
+        if (fullscreen_strip_visible)
+        {
+            int strip_y = WORKSPACE_HEIGHT - FULLSCREEN_STRIP_HEIGHT;
+            
+            // Background for strip (dark semi-transparent bar)
+            unsigned int strip_bg = 0xDD1a1a1a;
+            for (int y = strip_y; y < WORKSPACE_HEIGHT; ++y) {
+                for (int x = 0; x < WORKSPACE_WIDTH; ++x) {
+                    dual_buffer[y * WORKSPACE_WIDTH + x] = strip_bg;
+                }
+            }
+            
+            // Draw utility buttons in the strip
+            // Recreate button rendering for fullscreen mode (centered in strip)
+            int buttons_per_row = 4;
+            int button_spacing = WORKSPACE_WIDTH / (buttons_per_row + 1);
+            int button_y = strip_y + (FULLSCREEN_STRIP_HEIGHT - MENU_BUTTON_HEIGHT) / 2;
+            
+            for (int i = 0; i < UTILITY_BUTTON_COUNT; i++)
+            {
+                // Only show buttons 0, 1, 2, 3 in fullscreen strip (Menu, Quit, Swap, Fullscreen)
+                if (i > 3) continue;
+                
+                int button_x = button_spacing * (i + 1) - MENU_BUTTON_WIDTH / 2;
+                
+                // Draw placeholder button rectangle (gold color)
+                unsigned int button_color = 0xFFFFD700;
+                for (int y = button_y; y < button_y + MENU_BUTTON_HEIGHT; ++y) {
+                    if (y >= WORKSPACE_HEIGHT) break;
+                    for (int x = button_x; x < button_x + MENU_BUTTON_WIDTH; ++x) {
+                        if (x >= 0 && x < WORKSPACE_WIDTH) {
+                            dual_buffer[y * WORKSPACE_WIDTH + x] = button_color;
+                        }
+                    }
+                }
+                
+                // Highlight if pressed
+                if (utility_button_pressed[i]) {
+                    unsigned int highlight_color = 0x88FFFF00;
+                    for (int y = button_y; y < button_y + MENU_BUTTON_HEIGHT; ++y) {
+                        if (y >= WORKSPACE_HEIGHT) break;
+                        for (int x = button_x; x < button_x + MENU_BUTTON_WIDTH; ++x) {
+                            if (x >= 0 && x < WORKSPACE_WIDTH) {
+                                unsigned int existing = dual_buffer[y * WORKSPACE_WIDTH + x];
+                                unsigned int alpha = (highlight_color >> 24) & 0xFF;
+                                unsigned int inv_alpha = 255 - alpha;
+                                
+                                unsigned int r = ((highlight_color >> 16) & 0xFF);
+                                unsigned int g = ((highlight_color >> 8) & 0xFF);
+                                unsigned int b = (highlight_color & 0xFF);
+                                
+                                unsigned int existing_r = ((existing >> 16) & 0xFF);
+                                unsigned int existing_g = ((existing >> 8) & 0xFF);
+                                unsigned int existing_b = (existing & 0xFF);
+                                
+                                unsigned int blended_r = (r * alpha + existing_r * inv_alpha) / 255;
+                                unsigned int blended_g = (g * alpha + existing_g * inv_alpha) / 255;
+                                unsigned int blended_b = (b * alpha + existing_b * inv_alpha) / 255;
+                                
+                                dual_buffer[y * WORKSPACE_WIDTH + x] = 0xFF000000 | 
+                                    (blended_r << 16) | (blended_g << 8) | blended_b;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Draw border around strip
+            unsigned int border_color = 0xFFc7a814;
+            for (int x = 0; x < WORKSPACE_WIDTH; ++x) {
+                dual_buffer[strip_y * WORKSPACE_WIDTH + x] = border_color;
+                dual_buffer[(WORKSPACE_HEIGHT - 1) * WORKSPACE_WIDTH + x] = border_color;
+            }
+        }
+        
+        return;  // Done with fullscreen rendering
+    }
+    
+    // =========================================
+    // DUAL-SCREEN MODE (Normal Mode)
+    // =========================================
     // Determine screen positions based on display_swap setting
     int game_x_offset = display_swap ? KEYPAD_WIDTH : 0;
     int keypad_x_offset = display_swap ? 0 : GAME_SCREEN_WIDTH;
@@ -645,9 +783,9 @@ static void render_dual_screen(void)
     
     if (buttons_loaded > 0) {
         for (int i = 0; i < UTILITY_BUTTON_COUNT; i++) {
-            // DISABLED: Only render swap screen button (button 2)
+            // Render button 2 (swap screen) and button 3 (fullscreen toggle)
             // All other utility buttons are disabled and not rendered
-            if (i != 2) {
+            if (i != 2 && i != 3) {
                 continue;
             }
             
@@ -704,9 +842,9 @@ static void render_dual_screen(void)
         
         // === UTILITY BUTTON HIGHLIGHTING WHEN PRESSED ===
         for (int i = 0; i < UTILITY_BUTTON_COUNT; i++) {
-            // DISABLED: Only highlight swap screen button (button 2)
+            // Highlight buttons 2 (swap screen) and 3 (fullscreen toggle)
             // All other utility buttons are disabled
-            if (i != 2) {
+            if (i != 2 && i != 3) {
                 continue;
             }
             
@@ -958,12 +1096,82 @@ static void process_utility_button_input(void)
     }
     if (!mouse_button) coord_logged = 0;
     
+    // =========================================
+    // FULLSCREEN MODE BOTTOM STRIP DETECTION
+    // =========================================
+    if (fullscreen_mode)
+    {
+        // Touch in bottom zone reveals control strip
+        int bottom_touch_zone_y = WORKSPACE_HEIGHT - FULLSCREEN_TOUCH_ZONE;
+        if (mouse_y >= bottom_touch_zone_y && mouse_y < WORKSPACE_HEIGHT)
+        {
+            // User touched near bottom - show strip and reset timer
+            fullscreen_strip_visible = 1;
+            fullscreen_hide_timer = FULLSCREEN_HIDE_DELAY;
+            
+            if (mouse_button && fullscreen_strip_visible)
+            {
+                // Process button clicks in fullscreen strip
+                int strip_y = WORKSPACE_HEIGHT - FULLSCREEN_STRIP_HEIGHT;
+                int buttons_per_row = 4;
+                int button_spacing = WORKSPACE_WIDTH / (buttons_per_row + 1);
+                int button_y = strip_y + (FULLSCREEN_STRIP_HEIGHT - MENU_BUTTON_HEIGHT) / 2;
+                
+                for (int i = 0; i < 4; i++)  // Only process first 4 buttons in fullscreen
+                {
+                    int button_x = button_spacing * (i + 1) - MENU_BUTTON_WIDTH / 2;
+                    int is_over = (mouse_x >= button_x && mouse_x < button_x + MENU_BUTTON_WIDTH &&
+                                   mouse_y >= button_y && mouse_y < button_y + MENU_BUTTON_HEIGHT);
+                    
+                    if (is_over)
+                    {
+                        if (!utility_button_pressed[i])
+                        {
+                            utility_button_pressed[i] = 1;
+                            
+                            switch(i)
+                            {
+                                case 2:  // Swap screen
+                                    display_swap = !display_swap;
+                                    break;
+                                case 3:  // Fullscreen toggle (exit fullscreen)
+                                    fullscreen_mode = !fullscreen_mode;
+                                    fullscreen_strip_visible = 0;
+                                    fullscreen_hide_timer = 0;
+                                    break;
+                            }
+                            debug_log("[FULLSCREEN_BUTTON] Button %d pressed in fullscreen mode", i);
+                        }
+                    }
+                    else
+                    {
+                        utility_button_pressed[i] = 0;
+                    }
+                }
+            }
+        }
+        else
+        {
+            // Touch away from bottom zone - start countdown to hide strip
+            if (fullscreen_strip_visible && !mouse_button) {
+                fullscreen_hide_timer--;
+                if (fullscreen_hide_timer <= 0) {
+                    fullscreen_strip_visible = 0;
+                }
+            }
+        }
+        
+        return;  // Don't process hotspots in fullscreen mode
+    }
+    
+    // =========================================
+    // DUAL-SCREEN MODE UTILITY BUTTON PROCESSING
+    // =========================================
     // Track pressed buttons
     for (int i = 0; i < UTILITY_BUTTON_COUNT; i++)
     {
-        // DISABLED: Only process swap screen button (button 2)
-        // All other utility buttons are disabled
-        if (i != 2) {
+        // Only process buttons 2 (Swap) and 3 (Fullscreen) in dual-screen mode
+        if (i != 2 && i != 3) {
             // Clear pressed state for disabled buttons
             utility_button_pressed[i] = 0;
             continue;
@@ -993,6 +1201,19 @@ static void process_utility_button_input(void)
                     case 2:  // Swap screen button
                         debug_log("[BUTTON] Swap screen button pressed at x=%d y=%d", mouse_x, mouse_y);
                         display_swap = !display_swap;
+                        break;
+                    case 3:  // Fullscreen toggle button
+                        debug_log("[BUTTON] Fullscreen button pressed at x=%d y=%d", mouse_x, mouse_y);
+                        fullscreen_mode = !fullscreen_mode;
+                        if (fullscreen_mode) {
+                            // Entering fullscreen - show strip initially
+                            fullscreen_strip_visible = 1;
+                            fullscreen_hide_timer = FULLSCREEN_HIDE_DELAY;
+                        } else {
+                            // Exiting fullscreen - hide strip
+                            fullscreen_strip_visible = 0;
+                            fullscreen_hide_timer = 0;
+                        }
                         break;
                 }
             }
@@ -1316,6 +1537,15 @@ void retro_run(void)
 		check_variables(false);
 
 	InputPoll();
+	
+	// Update fullscreen mode timer
+	if (fullscreen_mode && fullscreen_strip_visible && fullscreen_hide_timer > 0) {
+		fullscreen_hide_timer--;
+		if (fullscreen_hide_timer <= 0) {
+			fullscreen_strip_visible = 0;
+			debug_log("[FULLSCREEN] Auto-hide timer expired, hiding strip");
+		}
+	}
 	
 	// DEBUG: Check pointer input at the start of retro_run and write to file
 	static int debug_frame_count = 0;
