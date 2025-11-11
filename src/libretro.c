@@ -113,19 +113,26 @@ typedef struct {
 overlay_hotspot_t overlay_hotspots[OVERLAY_HOTSPOT_COUNT];
 
 // Utility buttons positioned in 704×152 utility workspace (below game screen)
-// Layout: 2 rows × 4 columns, menu_button.png placeholders (200×50 each)
+// Layout: Up to 7 buttons available, currently using 2 (indices 0 and 2)
 // Available space: X=0-704 (704px = same as game width), Y=448-600 (152px height)
+// Spacing calculation for even distribution:
+// - Top gap: 17px (Y=448 to 465)
+// - Button 2 (Swap): 50px (Y=465 to 515)
+// - Middle gap: 17px (Y=515 to 532)
+// - Button 0 (Fullscreen): 50px (Y=532 to 582)
+// - Bottom gap: 18px (Y=582 to 600)
+// - Swap Screen (Button 2) on top row (Y=465)
+// - Fullscreen (Button 0) on bottom row (Y=532)
 // Note: Not all buttons are rendered/loaded - see render_dual_screen() for enabled buttons
 static utility_button_t utility_buttons[UTILITY_BUTTON_COUNT] = {
-    // Row 1 (Y=471) - 4 buttons with 5px horizontal gaps
-    {44, 471, MENU_BUTTON_WIDTH, MENU_BUTTON_HEIGHT, "Menu", RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO},           // Button 0: Menu
-    {249, 471, MENU_BUTTON_WIDTH, MENU_BUTTON_HEIGHT, "Quit", 0},                                              // Button 1: Quit
-    {454, 471, MENU_BUTTON_WIDTH, MENU_BUTTON_HEIGHT, "Swap", 0},                                              // Button 2: Swap Screen
-    {659, 471, MENU_BUTTON_WIDTH, MENU_BUTTON_HEIGHT, "Fullscreen", 0},                                        // Button 3: Fullscreen Toggle
-    // Row 2 (Y=526) - 3 buttons with 5px horizontal gaps
-    {44, 526, MENU_BUTTON_WIDTH, MENU_BUTTON_HEIGHT, "Save", 0},                                               // Button 4: Save
-    {249, 526, MENU_BUTTON_WIDTH, MENU_BUTTON_HEIGHT, "Load", 0},                                               // Button 5: Load
-    {454, 526, MENU_BUTTON_WIDTH, MENU_BUTTON_HEIGHT, "Screenshot", 0}                                          // Button 6: Screenshot
+    // Currently active buttons - CENTERED ON SEPARATE ROWS WITH EVEN SPACING
+    {252, 532, MENU_BUTTON_WIDTH, MENU_BUTTON_HEIGHT, "Fullscreen", 0},                                        // Button 0: Fullscreen Toggle (BOTTOM CENTER)
+    {0, 0, 0, 0, "", 0},                                                                                        // Button 1: Empty (reserved)
+    {252, 465, MENU_BUTTON_WIDTH, MENU_BUTTON_HEIGHT, "Swap", 0},                                              // Button 2: Swap Screen (TOP CENTER)
+    {0, 0, 0, 0, "", 0},                                                                                        // Button 3: Empty (reserved)
+    {0, 0, 0, 0, "", 0},                                                                                        // Button 4: Empty (reserved)
+    {0, 0, 0, 0, "", 0},                                                                                        // Button 5: Empty (reserved)
+    {0, 0, 0, 0, "", 0}                                                                                         // Button 6: Empty (reserved)
 };
 
 // Display system variables
@@ -139,6 +146,8 @@ static int display_swap = 0;  // 0 = game left/keypad right, 1 = game right/keyp
 static int fullscreen_mode = 0;  // 0 = dual screen, 1 = fullscreen game only
 static int fullscreen_strip_visible = 0;  // 1 = show bottom control strip, 0 = hidden
 static int fullscreen_hide_timer = 0;  // Countdown timer for auto-hiding strip
+static int overlay_visible_in_fullscreen = 0;  // 0 = hidden (default), 1 = show transparent overlay on game in fullscreen
+static int fullscreen_overlay_on_left = 0;  // 0 = overlay on right (default), 1 = overlay on left
 
 // Hotspot input tracking
 static int hotspot_pressed[OVERLAY_HOTSPOT_COUNT] = {0};  // Track which hotspots are currently pressed
@@ -199,24 +208,35 @@ static struct {
     int width;
     int height;
 } utility_button_images[UTILITY_BUTTON_COUNT] = {
-    {NULL, 0, 0, 0},  // Button 0: button_ra_menu.png
-    {NULL, 0, 0, 0},  // Button 1: button_quit.png
-    {NULL, 0, 0, 0},  // Button 2: button_swapscreen.png
-    {NULL, 0, 0, 0},  // Button 3: button_full_screen_toggle.png
-    {NULL, 0, 0, 0},  // Button 4: button_save.png
-    {NULL, 0, 0, 0},  // Button 5: button_load.png
-    {NULL, 0, 0, 0}   // Button 6: button_screenshot.png
+    {NULL, 0, 0, 0},  // Button 0: button_full_screen_toggle.png (Fullscreen)
+    {NULL, 0, 0, 0},  // Button 1: Empty (reserved)
+    {NULL, 0, 0, 0},  // Button 2: button_swapscreen.png (Swap)
+    {NULL, 0, 0, 0},  // Button 3: Empty (reserved)
+    {NULL, 0, 0, 0},  // Button 4: Empty (reserved)
+    {NULL, 0, 0, 0},  // Button 5: Empty (reserved)
+    {NULL, 0, 0, 0},  // Button 6: Empty (reserved)
 };
 
+// Fullscreen overlay toggle button image (only loaded/used in fullscreen mode)
+static struct {
+    unsigned int* buffer;
+    int loaded;
+    int width;
+    int height;
+} button_fullscreen_overlay_image = {NULL, 0, 0, 0};
+
 static const char* button_filenames[UTILITY_BUTTON_COUNT] = {
-    "button_ra_menu.png",
-    "button_quit.png",
-    "button_swapscreen.png",
     "button_full_screen_toggle.png",
-    "button_save.png",
-    "button_load.png",
-    "button_screenshot.png"
+    "",
+    "button_swapscreen.png",
+    "",
+    "",
+    "",
+    ""
 };
+
+// Fullscreen strip button image filename
+static const char* button_fullscreen_overlay_filename = "button_full_screen_overlay.png";
 
 // Initialize overlay hotspots for keypad (positioned on RIGHT side)
 static void init_overlay_hotspots(void)
@@ -362,9 +382,9 @@ static void load_utility_buttons(void)
     }
     
     for (int i = 0; i < UTILITY_BUTTON_COUNT; i++) {
-        // ENABLED: Load button 2 (swap screen) and button 3 (fullscreen toggle)
+        // ENABLED: Load button 0 (fullscreen toggle) and button 2 (swap screen)
         // All other utility buttons are disabled
-        if (i != 2 && i != 3) {
+        if (i != 0 && i != 2) {
             // Skip loading for disabled buttons
             continue;
         }
@@ -407,6 +427,44 @@ static void load_utility_buttons(void)
             printf("[UTILITY_BUTTON] Failed to load %s from %s\n", button_filenames[i], btn_path);
         }
     }
+    
+    // Load fullscreen overlay toggle button image
+    if (!button_fullscreen_overlay_image.loaded) {
+        char overlay_btn_path[512];
+        build_system_overlay_path(overlay_btn_path, sizeof(overlay_btn_path), button_fullscreen_overlay_filename);
+
+        
+        int width, height, channels;
+        unsigned char* img_data = stbi_load(overlay_btn_path, &width, &height, &channels, 4);
+        
+        if (img_data) {
+            printf("[FULLSCREEN_OVERLAY_BUTTON] Loaded fullscreen overlay button: %dx%d\n", width, height);
+            button_fullscreen_overlay_image.width = width;
+            button_fullscreen_overlay_image.height = height;
+            
+            if (!button_fullscreen_overlay_image.buffer) {
+                button_fullscreen_overlay_image.buffer = (unsigned int*)malloc(width * height * sizeof(unsigned int));
+            }
+            
+            if (button_fullscreen_overlay_image.buffer) {
+                for (int y = 0; y < height; y++) {
+                    for (int x = 0; x < width; x++) {
+                        unsigned char* pixel = img_data + (y * width + x) * 4;
+                        unsigned int alpha = pixel[3];
+                        unsigned int r = pixel[0];
+                        unsigned int g = pixel[1];
+                        unsigned int b = pixel[2];
+                        button_fullscreen_overlay_image.buffer[y * width + x] = (alpha << 24) | (r << 16) | (g << 8) | b;
+                    }
+                }
+                button_fullscreen_overlay_image.loaded = 1;
+                stbi_image_free(img_data);
+                printf("[FULLSCREEN_OVERLAY_BUTTON] Fullscreen overlay button loaded successfully\n");
+            }
+        } else {
+            printf("[FULLSCREEN_OVERLAY_BUTTON] Failed to load fullscreen_overlay.png from %s\n", overlay_btn_path);
+        }
+    }
 }
 
 // Cleanup utility button images
@@ -421,6 +479,15 @@ static void cleanup_utility_buttons(void)
         utility_button_images[i].width = 0;
         utility_button_images[i].height = 0;
     }
+    
+    // Cleanup fullscreen overlay button image
+    if (button_fullscreen_overlay_image.buffer) {
+        free(button_fullscreen_overlay_image.buffer);
+        button_fullscreen_overlay_image.buffer = NULL;
+    }
+    button_fullscreen_overlay_image.loaded = 0;
+    button_fullscreen_overlay_image.width = 0;
+    button_fullscreen_overlay_image.height = 0;
 }
 
 // Build overlay path from ROM name
@@ -599,6 +666,98 @@ static void render_dual_screen(void)
             }
         }
         
+        // Draw transparent overlay on right side in fullscreen mode (same as dual-screen layout)
+        if (overlay_visible_in_fullscreen && overlay_buffer && overlay_width > 0 && overlay_height > 0)
+        {
+            // First, render game-specific overlay with 40% transparency (drawn first, so it's underneath)
+            // Draw overlay at its position (left or right based on fullscreen_overlay_on_left flag)
+            int overlay_x_offset = (KEYPAD_WIDTH - overlay_width) / 2;
+            int overlay_x_workspace = fullscreen_overlay_on_left ? overlay_x_offset : (GAME_SCREEN_WIDTH + overlay_x_offset);
+            
+            // Render overlay with 40% transparency
+            for (int y = 0; y < overlay_height && y < WORKSPACE_HEIGHT; ++y) {
+                for (int x = 0; x < overlay_width; ++x) {
+                    int workspace_x = overlay_x_workspace + x;
+                    int workspace_y = y;
+                    
+                    if (workspace_x >= 0 && workspace_x < WORKSPACE_WIDTH && 
+                        workspace_y >= 0 && workspace_y < WORKSPACE_HEIGHT) {
+                        
+                        unsigned int overlay_pixel = overlay_buffer[y * overlay_width + x];
+                        unsigned int overlay_alpha = (overlay_pixel >> 24) & 0xFF;
+                        
+                        if (overlay_alpha > 0) {
+                            // Apply 40% opacity to overlay
+                            unsigned int final_alpha = (overlay_alpha * 40) / 100;
+                            unsigned int inv_alpha = 255 - final_alpha;
+                            
+                            unsigned int existing = dual_buffer[workspace_y * WORKSPACE_WIDTH + workspace_x];
+                            
+                            unsigned int overlay_r = (overlay_pixel >> 16) & 0xFF;
+                            unsigned int overlay_g = (overlay_pixel >> 8) & 0xFF;
+                            unsigned int overlay_b = overlay_pixel & 0xFF;
+                            
+                            unsigned int existing_r = (existing >> 16) & 0xFF;
+                            unsigned int existing_g = (existing >> 8) & 0xFF;
+                            unsigned int existing_b = existing & 0xFF;
+                            
+                            unsigned int blended_r = (overlay_r * final_alpha + existing_r * inv_alpha) / 255;
+                            unsigned int blended_g = (overlay_g * final_alpha + existing_g * inv_alpha) / 255;
+                            unsigned int blended_b = (overlay_b * final_alpha + existing_b * inv_alpha) / 255;
+                            
+                            dual_buffer[workspace_y * WORKSPACE_WIDTH + workspace_x] = 0xFF000000 | 
+                                (blended_r << 16) | (blended_g << 8) | blended_b;
+                        }
+                    }
+                }
+            }
+            
+            // Then, render controller_base template on top (drawn last, so it's on top)
+            if (controller_base_loaded && controller_base && controller_base_width > 0 && controller_base_height > 0)
+            {
+                // Draw controller_base at its position (left or right based on fullscreen_overlay_on_left flag)
+                int ctrl_base_x_offset = (KEYPAD_WIDTH - controller_base_width) / 2;
+                int ctrl_base_x_workspace = fullscreen_overlay_on_left ? ctrl_base_x_offset : (GAME_SCREEN_WIDTH + ctrl_base_x_offset);
+                
+                for (int y = 0; y < controller_base_height && y < WORKSPACE_HEIGHT; ++y) {
+                    for (int x = 0; x < controller_base_width; ++x) {
+                        int workspace_x = ctrl_base_x_workspace + x;
+                        int workspace_y = y;
+                        
+                        if (workspace_x >= 0 && workspace_x < WORKSPACE_WIDTH && 
+                            workspace_y >= 0 && workspace_y < WORKSPACE_HEIGHT) {
+                            
+                            unsigned int base_pixel = controller_base[y * controller_base_width + x];
+                            unsigned int base_alpha = (base_pixel >> 24) & 0xFF;
+                            
+                            if (base_alpha > 0) {
+                                // Apply 40% opacity to controller base
+                                unsigned int final_alpha = (base_alpha * 40) / 100;
+                                unsigned int inv_alpha = 255 - final_alpha;
+                                
+                                unsigned int existing = dual_buffer[workspace_y * WORKSPACE_WIDTH + workspace_x];
+                                
+                                unsigned int base_r = (base_pixel >> 16) & 0xFF;
+                                unsigned int base_g = (base_pixel >> 8) & 0xFF;
+                                unsigned int base_b = base_pixel & 0xFF;
+                                
+                                unsigned int existing_r = (existing >> 16) & 0xFF;
+                                unsigned int existing_g = (existing >> 8) & 0xFF;
+                                unsigned int existing_b = existing & 0xFF;
+                                
+                                unsigned int blended_r = (base_r * final_alpha + existing_r * inv_alpha) / 255;
+                                unsigned int blended_g = (base_g * final_alpha + existing_g * inv_alpha) / 255;
+                                unsigned int blended_b = (base_b * final_alpha + existing_b * inv_alpha) / 255;
+                                
+                                dual_buffer[workspace_y * WORKSPACE_WIDTH + workspace_x] = 0xFF000000 | 
+                                    (blended_r << 16) | (blended_g << 8) | blended_b;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
         // Draw auto-hide strip at bottom if visible
         if (fullscreen_strip_visible)
         {
@@ -613,43 +772,48 @@ static void render_dual_screen(void)
             }
             
             // Draw utility buttons in the strip
-            // Recreate button rendering for fullscreen mode (centered in strip)
-            int buttons_per_row = 4;
-            int button_spacing = WORKSPACE_WIDTH / (buttons_per_row + 1);
+            // Show 3 buttons in fullscreen mode: Exit (Button 0), Show Overlay (Button 7), and Swap (Button 2)
+            // Position them at: 1/4, 1/2, and 3/4 of workspace width
             int button_y = strip_y + (FULLSCREEN_STRIP_HEIGHT - MENU_BUTTON_HEIGHT) / 2;
             
-            for (int i = 0; i < UTILITY_BUTTON_COUNT; i++)
-            {
-                // Only show buttons 0, 1, 2, 3 in fullscreen strip (Menu, Quit, Swap, Fullscreen)
-                if (i > 3) continue;
+            // Button positions for fullscreen strip (3 buttons evenly spaced)
+            int button_x_pos[3];
+            button_x_pos[0] = (WORKSPACE_WIDTH / 4) - (MENU_BUTTON_WIDTH / 2);        // 1/4 - Exit
+            button_x_pos[1] = (WORKSPACE_WIDTH / 2) - (MENU_BUTTON_WIDTH / 2);        // 1/2 - Swap
+            button_x_pos[2] = (3 * WORKSPACE_WIDTH / 4) - (MENU_BUTTON_WIDTH / 2);    // 3/4 - Show Overlay
+            
+            // Button 0: Exit fullscreen
+            int button_x = button_x_pos[0];
+            
+            // Try to render button 0 PNG image if loaded
+            if (utility_button_images[0].loaded && utility_button_images[0].buffer) {
+                int img_width = utility_button_images[0].width;
+                int img_height = utility_button_images[0].height;
                 
-                int button_x = button_spacing * (i + 1) - MENU_BUTTON_WIDTH / 2;
-                
-                // Draw placeholder button rectangle (gold color)
-                unsigned int button_color = 0xFFFFD700;
-                for (int y = button_y; y < button_y + MENU_BUTTON_HEIGHT; ++y) {
-                    if (y >= WORKSPACE_HEIGHT) break;
-                    for (int x = button_x; x < button_x + MENU_BUTTON_WIDTH; ++x) {
-                        if (x >= 0 && x < WORKSPACE_WIDTH) {
-                            dual_buffer[y * WORKSPACE_WIDTH + x] = button_color;
-                        }
-                    }
-                }
-                
-                // Highlight if pressed
-                if (utility_button_pressed[i]) {
-                    unsigned int highlight_color = 0x88FFFF00;
-                    for (int y = button_y; y < button_y + MENU_BUTTON_HEIGHT; ++y) {
-                        if (y >= WORKSPACE_HEIGHT) break;
-                        for (int x = button_x; x < button_x + MENU_BUTTON_WIDTH; ++x) {
-                            if (x >= 0 && x < WORKSPACE_WIDTH) {
-                                unsigned int existing = dual_buffer[y * WORKSPACE_WIDTH + x];
-                                unsigned int alpha = (highlight_color >> 24) & 0xFF;
+                // Blit button image to fullscreen strip
+                for (int img_y = 0; img_y < img_height; img_y++) {
+                    for (int img_x = 0; img_x < img_width; img_x++) {
+                        int workspace_x = button_x + img_x;
+                        int workspace_y = button_y + img_y;
+                        
+                        if (workspace_x >= WORKSPACE_WIDTH || workspace_y >= WORKSPACE_HEIGHT) continue;
+                        if (workspace_x < 0) continue;
+                        
+                        unsigned int button_pixel = utility_button_images[0].buffer[img_y * img_width + img_x];
+                        unsigned int alpha = (button_pixel >> 24) & 0xFF;
+                        
+                        if (alpha > 0) {
+                            // Blend with alpha
+                            if (alpha == 255) {
+                                dual_buffer[workspace_y * WORKSPACE_WIDTH + workspace_x] = button_pixel;
+                            } else {
+                                // Alpha blend
+                                unsigned int existing = dual_buffer[workspace_y * WORKSPACE_WIDTH + workspace_x];
                                 unsigned int inv_alpha = 255 - alpha;
                                 
-                                unsigned int r = ((highlight_color >> 16) & 0xFF);
-                                unsigned int g = ((highlight_color >> 8) & 0xFF);
-                                unsigned int b = (highlight_color & 0xFF);
+                                unsigned int r = ((button_pixel >> 16) & 0xFF);
+                                unsigned int g = ((button_pixel >> 8) & 0xFF);
+                                unsigned int b = (button_pixel & 0xFF);
                                 
                                 unsigned int existing_r = ((existing >> 16) & 0xFF);
                                 unsigned int existing_g = ((existing >> 8) & 0xFF);
@@ -659,9 +823,293 @@ static void render_dual_screen(void)
                                 unsigned int blended_g = (g * alpha + existing_g * inv_alpha) / 255;
                                 unsigned int blended_b = (b * alpha + existing_b * inv_alpha) / 255;
                                 
-                                dual_buffer[y * WORKSPACE_WIDTH + x] = 0xFF000000 | 
+                                dual_buffer[workspace_y * WORKSPACE_WIDTH + workspace_x] = 0xFF000000 | 
                                     (blended_r << 16) | (blended_g << 8) | blended_b;
                             }
+                        }
+                    }
+                }
+            } else {
+                // Fallback: Draw placeholder button rectangle (gold color) if PNG not loaded
+                unsigned int button_color = 0xFFFFD700;
+                for (int y = button_y; y < button_y + MENU_BUTTON_HEIGHT; ++y) {
+                    if (y >= WORKSPACE_HEIGHT) break;
+                    for (int x = button_x; x < button_x + MENU_BUTTON_WIDTH; ++x) {
+                        if (x >= 0 && x < WORKSPACE_WIDTH) {
+                            dual_buffer[y * WORKSPACE_WIDTH + x] = button_color;
+                        }
+                    }
+                }
+            }
+            
+            // Button 1: Show/Hide overlay in fullscreen
+            button_x = button_x_pos[1];
+            
+            // Try to render fullscreen overlay toggle button PNG image if loaded
+            if (button_fullscreen_overlay_image.loaded && button_fullscreen_overlay_image.buffer) {
+                int img_width = button_fullscreen_overlay_image.width;
+                int img_height = button_fullscreen_overlay_image.height;
+                
+                // Blit button image to fullscreen strip
+                for (int img_y = 0; img_y < img_height; img_y++) {
+                    for (int img_x = 0; img_x < img_width; img_x++) {
+                        int workspace_x = button_x + img_x;
+                        int workspace_y = button_y + img_y;
+                        
+                        if (workspace_x >= WORKSPACE_WIDTH || workspace_y >= WORKSPACE_HEIGHT) continue;
+                        if (workspace_x < 0) continue;
+                        
+                        unsigned int button_pixel = button_fullscreen_overlay_image.buffer[img_y * img_width + img_x];
+                        unsigned int alpha = (button_pixel >> 24) & 0xFF;
+                        
+                        if (alpha > 0) {
+                            // Blend with alpha
+                            if (alpha == 255) {
+                                dual_buffer[workspace_y * WORKSPACE_WIDTH + workspace_x] = button_pixel;
+                            } else {
+                                // Alpha blend
+                                unsigned int existing = dual_buffer[workspace_y * WORKSPACE_WIDTH + workspace_x];
+                                unsigned int inv_alpha = 255 - alpha;
+                                
+                                unsigned int r = ((button_pixel >> 16) & 0xFF);
+                                unsigned int g = ((button_pixel >> 8) & 0xFF);
+                                unsigned int b = (button_pixel & 0xFF);
+                                
+                                unsigned int existing_r = ((existing >> 16) & 0xFF);
+                                unsigned int existing_g = ((existing >> 8) & 0xFF);
+                                unsigned int existing_b = (existing & 0xFF);
+                                
+                                unsigned int blended_r = (r * alpha + existing_r * inv_alpha) / 255;
+                                unsigned int blended_g = (g * alpha + existing_g * inv_alpha) / 255;
+                                unsigned int blended_b = (b * alpha + existing_b * inv_alpha) / 255;
+                                
+                                dual_buffer[workspace_y * WORKSPACE_WIDTH + workspace_x] = 0xFF000000 | 
+                                    (blended_r << 16) | (blended_g << 8) | blended_b;
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Fallback: Draw placeholder button rectangle (gold color)
+                unsigned int button_color = 0xFFFFD700;
+                for (int y = button_y; y < button_y + MENU_BUTTON_HEIGHT; ++y) {
+                    if (y >= WORKSPACE_HEIGHT) break;
+                    for (int x = button_x; x < button_x + MENU_BUTTON_WIDTH; ++x) {
+                        if (x >= 0 && x < WORKSPACE_WIDTH) {
+                            dual_buffer[y * WORKSPACE_WIDTH + x] = button_color;
+                        }
+                    }
+                }
+            }
+            
+            // Button 2: Swap overlay left/right in fullscreen
+            button_x = button_x_pos[1];
+            
+            // Try to render button 2 PNG image if loaded
+            if (utility_button_images[2].loaded && utility_button_images[2].buffer) {
+                int img_width = utility_button_images[2].width;
+                int img_height = utility_button_images[2].height;
+                
+                // Blit button image to fullscreen strip
+                for (int img_y = 0; img_y < img_height; img_y++) {
+                    for (int img_x = 0; img_x < img_width; img_x++) {
+                        int workspace_x = button_x + img_x;
+                        int workspace_y = button_y + img_y;
+                        
+                        if (workspace_x >= WORKSPACE_WIDTH || workspace_y >= WORKSPACE_HEIGHT) continue;
+                        if (workspace_x < 0) continue;
+                        
+                        unsigned int button_pixel = utility_button_images[2].buffer[img_y * img_width + img_x];
+                        unsigned int alpha = (button_pixel >> 24) & 0xFF;
+                        
+                        if (alpha > 0) {
+                            // Blend with alpha
+                            if (alpha == 255) {
+                                dual_buffer[workspace_y * WORKSPACE_WIDTH + workspace_x] = button_pixel;
+                            } else {
+                                // Alpha blend
+                                unsigned int existing = dual_buffer[workspace_y * WORKSPACE_WIDTH + workspace_x];
+                                unsigned int inv_alpha = 255 - alpha;
+                                
+                                unsigned int r = ((button_pixel >> 16) & 0xFF);
+                                unsigned int g = ((button_pixel >> 8) & 0xFF);
+                                unsigned int b = (button_pixel & 0xFF);
+                                
+                                unsigned int existing_r = ((existing >> 16) & 0xFF);
+                                unsigned int existing_g = ((existing >> 8) & 0xFF);
+                                unsigned int existing_b = (existing & 0xFF);
+                                
+                                unsigned int blended_r = (r * alpha + existing_r * inv_alpha) / 255;
+                                unsigned int blended_g = (g * alpha + existing_g * inv_alpha) / 255;
+                                unsigned int blended_b = (b * alpha + existing_b * inv_alpha) / 255;
+                                
+                                dual_buffer[workspace_y * WORKSPACE_WIDTH + workspace_x] = 0xFF000000 | 
+                                    (blended_r << 16) | (blended_g << 8) | blended_b;
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Fallback: Draw placeholder button rectangle (gold color)
+                unsigned int button_color = 0xFFFFD700;
+                for (int y = button_y; y < button_y + MENU_BUTTON_HEIGHT; ++y) {
+                    if (y >= WORKSPACE_HEIGHT) break;
+                    for (int x = button_x; x < button_x + MENU_BUTTON_WIDTH; ++x) {
+                        if (x >= 0 && x < WORKSPACE_WIDTH) {
+                            dual_buffer[y * WORKSPACE_WIDTH + x] = button_color;
+                        }
+                    }
+                }
+            }
+            
+            // Button 7: Show/Hide overlay in fullscreen
+            button_x = button_x_pos[2];
+            
+            // Try to render fullscreen overlay toggle button PNG image if loaded
+            if (button_fullscreen_overlay_image.loaded && button_fullscreen_overlay_image.buffer) {
+                int img_width = button_fullscreen_overlay_image.width;
+                int img_height = button_fullscreen_overlay_image.height;
+                
+                // Blit button image to fullscreen strip
+                for (int img_y = 0; img_y < img_height; img_y++) {
+                    for (int img_x = 0; img_x < img_width; img_x++) {
+                        int workspace_x = button_x + img_x;
+                        int workspace_y = button_y + img_y;
+                        
+                        if (workspace_x >= WORKSPACE_WIDTH || workspace_y >= WORKSPACE_HEIGHT) continue;
+                        if (workspace_x < 0) continue;
+                        
+                        unsigned int button_pixel = button_fullscreen_overlay_image.buffer[img_y * img_width + img_x];
+                        unsigned int alpha = (button_pixel >> 24) & 0xFF;
+                        
+                        if (alpha > 0) {
+                            // Blend with alpha
+                            if (alpha == 255) {
+                                dual_buffer[workspace_y * WORKSPACE_WIDTH + workspace_x] = button_pixel;
+                            } else {
+                                // Alpha blend
+                                unsigned int existing = dual_buffer[workspace_y * WORKSPACE_WIDTH + workspace_x];
+                                unsigned int inv_alpha = 255 - alpha;
+                                
+                                unsigned int r = ((button_pixel >> 16) & 0xFF);
+                                unsigned int g = ((button_pixel >> 8) & 0xFF);
+                                unsigned int b = (button_pixel & 0xFF);
+                                
+                                unsigned int existing_r = ((existing >> 16) & 0xFF);
+                                unsigned int existing_g = ((existing >> 8) & 0xFF);
+                                unsigned int existing_b = (existing & 0xFF);
+                                
+                                unsigned int blended_r = (r * alpha + existing_r * inv_alpha) / 255;
+                                unsigned int blended_g = (g * alpha + existing_g * inv_alpha) / 255;
+                                unsigned int blended_b = (b * alpha + existing_b * inv_alpha) / 255;
+                                
+                                dual_buffer[workspace_y * WORKSPACE_WIDTH + workspace_x] = 0xFF000000 | 
+                                    (blended_r << 16) | (blended_g << 8) | blended_b;
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Fallback: Draw placeholder button rectangle (gold color)
+                unsigned int button_color = 0xFFFFD700;
+                for (int y = button_y; y < button_y + MENU_BUTTON_HEIGHT; ++y) {
+                    if (y >= WORKSPACE_HEIGHT) break;
+                    for (int x = button_x; x < button_x + MENU_BUTTON_WIDTH; ++x) {
+                        if (x >= 0 && x < WORKSPACE_WIDTH) {
+                            dual_buffer[y * WORKSPACE_WIDTH + x] = button_color;
+                        }
+                    }
+                }
+            }
+            
+            // Highlight if pressed
+            if (utility_button_pressed[0]) {
+                unsigned int highlight_color = 0x88FFFF00;
+                int btn_x = button_x_pos[0];
+                for (int y = button_y; y < button_y + MENU_BUTTON_HEIGHT; ++y) {
+                    if (y >= WORKSPACE_HEIGHT) break;
+                    for (int x = btn_x; x < btn_x + MENU_BUTTON_WIDTH; ++x) {
+                        if (x >= 0 && x < WORKSPACE_WIDTH) {
+                            unsigned int existing = dual_buffer[y * WORKSPACE_WIDTH + x];
+                            unsigned int alpha = (highlight_color >> 24) & 0xFF;
+                            unsigned int inv_alpha = 255 - alpha;
+                            
+                            unsigned int r = ((highlight_color >> 16) & 0xFF);
+                            unsigned int g = ((highlight_color >> 8) & 0xFF);
+                            unsigned int b = (highlight_color & 0xFF);
+                            
+                            unsigned int existing_r = ((existing >> 16) & 0xFF);
+                            unsigned int existing_g = ((existing >> 8) & 0xFF);
+                            unsigned int existing_b = (existing & 0xFF);
+                            
+                            unsigned int blended_r = (r * alpha + existing_r * inv_alpha) / 255;
+                            unsigned int blended_g = (g * alpha + existing_g * inv_alpha) / 255;
+                            unsigned int blended_b = (b * alpha + existing_b * inv_alpha) / 255;
+                            
+                            dual_buffer[y * WORKSPACE_WIDTH + x] = 0xFF000000 | 
+                                (blended_r << 16) | (blended_g << 8) | blended_b;
+                        }
+                    }
+                }
+            }
+            
+            // Highlight swap button if pressed
+            if (utility_button_pressed[2]) {
+                unsigned int highlight_color = 0x88FFFF00;
+                int btn_x = button_x_pos[1];
+                for (int y = button_y; y < button_y + MENU_BUTTON_HEIGHT; ++y) {
+                    if (y >= WORKSPACE_HEIGHT) break;
+                    for (int x = btn_x; x < btn_x + MENU_BUTTON_WIDTH; ++x) {
+                        if (x >= 0 && x < WORKSPACE_WIDTH) {
+                            unsigned int existing = dual_buffer[y * WORKSPACE_WIDTH + x];
+                            unsigned int alpha = (highlight_color >> 24) & 0xFF;
+                            unsigned int inv_alpha = 255 - alpha;
+                            
+                            unsigned int r = ((highlight_color >> 16) & 0xFF);
+                            unsigned int g = ((highlight_color >> 8) & 0xFF);
+                            unsigned int b = (highlight_color & 0xFF);
+                            
+                            unsigned int existing_r = ((existing >> 16) & 0xFF);
+                            unsigned int existing_g = ((existing >> 8) & 0xFF);
+                            unsigned int existing_b = (existing & 0xFF);
+                            
+                            unsigned int blended_r = (r * alpha + existing_r * inv_alpha) / 255;
+                            unsigned int blended_g = (g * alpha + existing_g * inv_alpha) / 255;
+                            unsigned int blended_b = (b * alpha + existing_b * inv_alpha) / 255;
+                            
+                            dual_buffer[y * WORKSPACE_WIDTH + x] = 0xFF000000 | 
+                                (blended_r << 16) | (blended_g << 8) | blended_b;
+                        }
+                    }
+                }
+            }
+            
+            // Highlight overlay toggle button if pressed
+            if (utility_button_pressed[7]) {
+                unsigned int highlight_color = 0x88FFFF00;
+                int btn_x = button_x_pos[2];
+                for (int y = button_y; y < button_y + MENU_BUTTON_HEIGHT; ++y) {
+                    if (y >= WORKSPACE_HEIGHT) break;
+                    for (int x = btn_x; x < btn_x + MENU_BUTTON_WIDTH; ++x) {
+                        if (x >= 0 && x < WORKSPACE_WIDTH) {
+                            unsigned int existing = dual_buffer[y * WORKSPACE_WIDTH + x];
+                            unsigned int alpha = (highlight_color >> 24) & 0xFF;
+                            unsigned int inv_alpha = 255 - alpha;
+                            
+                            unsigned int r = ((highlight_color >> 16) & 0xFF);
+                            unsigned int g = ((highlight_color >> 8) & 0xFF);
+                            unsigned int b = (highlight_color & 0xFF);
+                            
+                            unsigned int existing_r = ((existing >> 16) & 0xFF);
+                            unsigned int existing_g = ((existing >> 8) & 0xFF);
+                            unsigned int existing_b = (existing & 0xFF);
+                            
+                            unsigned int blended_r = (r * alpha + existing_r * inv_alpha) / 255;
+                            unsigned int blended_g = (g * alpha + existing_g * inv_alpha) / 255;
+                            unsigned int blended_b = (b * alpha + existing_b * inv_alpha) / 255;
+                            
+                            dual_buffer[y * WORKSPACE_WIDTH + x] = 0xFF000000 | 
+                                (blended_r << 16) | (blended_g << 8) | blended_b;
                         }
                     }
                 }
@@ -673,6 +1121,8 @@ static void render_dual_screen(void)
                 dual_buffer[strip_y * WORKSPACE_WIDTH + x] = border_color;
                 dual_buffer[(WORKSPACE_HEIGHT - 1) * WORKSPACE_WIDTH + x] = border_color;
             }
+
+
         }
         
         return;  // Done with fullscreen rendering
@@ -783,9 +1233,9 @@ static void render_dual_screen(void)
     
     if (buttons_loaded > 0) {
         for (int i = 0; i < UTILITY_BUTTON_COUNT; i++) {
-            // Render button 2 (swap screen) and button 3 (fullscreen toggle)
+            // Render button 0 (fullscreen toggle) and button 2 (swap screen)
             // All other utility buttons are disabled and not rendered
-            if (i != 2 && i != 3) {
+            if (i != 0 && i != 2) {
                 continue;
             }
             
@@ -842,9 +1292,9 @@ static void render_dual_screen(void)
         
         // === UTILITY BUTTON HIGHLIGHTING WHEN PRESSED ===
         for (int i = 0; i < UTILITY_BUTTON_COUNT; i++) {
-            // Highlight buttons 2 (swap screen) and 3 (fullscreen toggle)
+            // Highlight buttons 0 (fullscreen toggle) and 2 (swap screen)
             // All other utility buttons are disabled
-            if (i != 2 && i != 3) {
+            if (i != 0 && i != 2) {
                 continue;
             }
             
@@ -882,14 +1332,23 @@ static void render_dual_screen(void)
             }
         }
     } else {
-        // Fallback: Draw gold rectangles if utility buttons not loaded
+        // Fallback: Draw gold rectangles for buttons 0 and 2 only (if utility buttons not loaded)
         unsigned int utility_color = 0xFFFFD700;
         for (int i = 0; i < UTILITY_BUTTON_COUNT; i++) {
+            // Only render buttons 0 and 2
+            if (i != 0 && i != 2) {
+                continue;
+            }
+            
             utility_button_t* btn = &utility_buttons[i];
+            
+            // Apply game_x_offset to button position (buttons move with game)
+            int button_x_offset = game_x_offset;
+            
             for (int y = btn->y; y < btn->y + btn->height; ++y) {
                 if (y >= WORKSPACE_HEIGHT) break;
-                for (int x = btn->x; x < btn->x + btn->width; ++x) {
-                    if (x >= WORKSPACE_WIDTH) break;
+                for (int x = button_x_offset + btn->x; x < button_x_offset + btn->x + btn->width; ++x) {
+                    if (x < 0 || x >= WORKSPACE_WIDTH) break;
                     dual_buffer[y * WORKSPACE_WIDTH + x] = utility_color;
                 }
             }
@@ -991,8 +1450,17 @@ static void render_dual_screen(void)
     
     // === HOTSPOT HIGHLIGHTING - Show which buttons are pressed by touch ===
     // Highlight all pressed hotspots (from touch input detection)
-    // When display_swap is true, hotspots translate from right side to left side
-    int hotspot_x_adjust = display_swap ? (-GAME_SCREEN_WIDTH) : 0;
+    // In dual-screen: when display_swap is true, hotspots translate from right side to left side
+    // In fullscreen: when fullscreen_overlay_on_left is true, hotspots translate from right side to left side
+    int hotspot_x_adjust = 0;
+    
+    if (fullscreen_mode) {
+        // Fullscreen mode: adjust based on overlay position
+        hotspot_x_adjust = fullscreen_overlay_on_left ? (-GAME_SCREEN_WIDTH) : 0;
+    } else {
+        // Dual-screen mode: adjust based on keypad position
+        hotspot_x_adjust = display_swap ? (-GAME_SCREEN_WIDTH) : 0;
+    }
     
     for (int i = 0; i < OVERLAY_HOTSPOT_COUNT; i++) {
         if (hotspot_pressed[i]) {
@@ -1113,41 +1581,90 @@ static void process_utility_button_input(void)
             {
                 // Process button clicks in fullscreen strip
                 int strip_y = WORKSPACE_HEIGHT - FULLSCREEN_STRIP_HEIGHT;
-                int buttons_per_row = 4;
-                int button_spacing = WORKSPACE_WIDTH / (buttons_per_row + 1);
                 int button_y = strip_y + (FULLSCREEN_STRIP_HEIGHT - MENU_BUTTON_HEIGHT) / 2;
                 
-                for (int i = 0; i < 4; i++)  // Only process first 4 buttons in fullscreen
+                // Button positions for fullscreen strip (3 buttons evenly spaced)
+                int button_x_pos[3];
+                button_x_pos[0] = (WORKSPACE_WIDTH / 4) - (MENU_BUTTON_WIDTH / 2);        // 1/4 - Exit
+                button_x_pos[1] = (WORKSPACE_WIDTH / 2) - (MENU_BUTTON_WIDTH / 2);        // 1/2 - Swap
+                button_x_pos[2] = (3 * WORKSPACE_WIDTH / 4) - (MENU_BUTTON_WIDTH / 2);    // 3/4 - Show Overlay
+                
+                // Check button 0 (Exit fullscreen)
+                int button_x = button_x_pos[0];
+                int is_over = (mouse_x >= button_x && mouse_x < button_x + MENU_BUTTON_WIDTH &&
+                               mouse_y >= button_y && mouse_y < button_y + MENU_BUTTON_HEIGHT);
+                
+                if (is_over)
                 {
-                    int button_x = button_spacing * (i + 1) - MENU_BUTTON_WIDTH / 2;
-                    int is_over = (mouse_x >= button_x && mouse_x < button_x + MENU_BUTTON_WIDTH &&
-                                   mouse_y >= button_y && mouse_y < button_y + MENU_BUTTON_HEIGHT);
-                    
-                    if (is_over)
+                    if (!utility_button_pressed[0])
                     {
-                        if (!utility_button_pressed[i])
-                        {
-                            utility_button_pressed[i] = 1;
-                            
-                            switch(i)
-                            {
-                                case 2:  // Swap screen
-                                    display_swap = !display_swap;
-                                    break;
-                                case 3:  // Fullscreen toggle (exit fullscreen)
-                                    fullscreen_mode = !fullscreen_mode;
-                                    fullscreen_strip_visible = 0;
-                                    fullscreen_hide_timer = 0;
-                                    break;
-                            }
-                            debug_log("[FULLSCREEN_BUTTON] Button %d pressed in fullscreen mode", i);
-                        }
-                    }
-                    else
-                    {
-                        utility_button_pressed[i] = 0;
+                        utility_button_pressed[0] = 1;
+                        
+                        // Fullscreen toggle (exit fullscreen)
+                        fullscreen_mode = !fullscreen_mode;
+                        fullscreen_strip_visible = 0;
+                        fullscreen_hide_timer = 0;
+                        
+                        debug_log("[FULLSCREEN_BUTTON] Button 0 (Exit fullscreen) pressed");
                     }
                 }
+                else
+                {
+                    utility_button_pressed[0] = 0;
+                }
+                
+                // Check swap button (Swap overlay left/right)
+                button_x = button_x_pos[1];
+                is_over = (mouse_x >= button_x && mouse_x < button_x + MENU_BUTTON_WIDTH &&
+                           mouse_y >= button_y && mouse_y < button_y + MENU_BUTTON_HEIGHT);
+                
+                if (is_over)
+                {
+                    if (!utility_button_pressed[2])  // Use button index 2 for swap
+                    {
+                        utility_button_pressed[2] = 1;
+                        
+                        // Toggle overlay position in fullscreen (left/right)
+                        fullscreen_overlay_on_left = !fullscreen_overlay_on_left;
+                        
+                        debug_log("[FULLSCREEN_BUTTON] Swap button pressed, overlay now on %s", 
+                                  fullscreen_overlay_on_left ? "LEFT" : "RIGHT");
+                    }
+                }
+                else
+                {
+                    utility_button_pressed[2] = 0;
+                }
+                
+                // Check overlay toggle button (Show/Hide controller overlay)
+                button_x = button_x_pos[2];
+                is_over = (mouse_x >= button_x && mouse_x < button_x + MENU_BUTTON_WIDTH &&
+                           mouse_y >= button_y && mouse_y < button_y + MENU_BUTTON_HEIGHT);
+                
+                if (is_over)
+                {
+                    if (!utility_button_pressed[7])  // Use button index 7 for overlay toggle
+                    {
+                        utility_button_pressed[7] = 1;
+                        
+                        // Toggle overlay visibility in fullscreen
+                        overlay_visible_in_fullscreen = !overlay_visible_in_fullscreen;
+                        
+                        debug_log("[FULLSCREEN_BUTTON] Overlay toggle button pressed, now %s", 
+                                  overlay_visible_in_fullscreen ? "VISIBLE" : "HIDDEN");
+                    }
+                }
+                else
+                {
+                    utility_button_pressed[7] = 0;
+                }
+            }
+            else if (!mouse_button)
+            {
+                // Mouse button released - clear all fullscreen button states
+                utility_button_pressed[0] = 0;
+                utility_button_pressed[2] = 0;
+                utility_button_pressed[7] = 0;
             }
         }
         else
@@ -1159,6 +1676,10 @@ static void process_utility_button_input(void)
                     fullscreen_strip_visible = 0;
                 }
             }
+            // Clear button states when not touching bottom zone
+            utility_button_pressed[0] = 0;
+            utility_button_pressed[2] = 0;
+            utility_button_pressed[7] = 0;
         }
         
         return;  // Don't process hotspots in fullscreen mode
@@ -1170,8 +1691,8 @@ static void process_utility_button_input(void)
     // Track pressed buttons
     for (int i = 0; i < UTILITY_BUTTON_COUNT; i++)
     {
-        // Only process buttons 2 (Swap) and 3 (Fullscreen) in dual-screen mode
-        if (i != 2 && i != 3) {
+        // Only process buttons 0 (Fullscreen) and 2 (Swap) in dual-screen mode
+        if (i != 0 && i != 2) {
             // Clear pressed state for disabled buttons
             utility_button_pressed[i] = 0;
             continue;
@@ -1198,11 +1719,7 @@ static void process_utility_button_input(void)
                 // Execute button-specific action
                 switch(i)
                 {
-                    case 2:  // Swap screen button
-                        debug_log("[BUTTON] Swap screen button pressed at x=%d y=%d", mouse_x, mouse_y);
-                        display_swap = !display_swap;
-                        break;
-                    case 3:  // Fullscreen toggle button
+                    case 0:  // Fullscreen toggle button
                         debug_log("[BUTTON] Fullscreen button pressed at x=%d y=%d", mouse_x, mouse_y);
                         fullscreen_mode = !fullscreen_mode;
                         if (fullscreen_mode) {
@@ -1214,6 +1731,10 @@ static void process_utility_button_input(void)
                             fullscreen_strip_visible = 0;
                             fullscreen_hide_timer = 0;
                         }
+                        break;
+                    case 2:  // Swap screen button
+                        debug_log("[BUTTON] Swap screen button pressed at x=%d y=%d", mouse_x, mouse_y);
+                        display_swap = !display_swap;
                         break;
                 }
             }
@@ -1267,15 +1788,32 @@ static void process_hotspot_input(void)
     {
         overlay_hotspot_t* h = &overlay_hotspots[i];
         
-        // When display_swap is true, keypad moves to LEFT (0) and game moves to RIGHT (370)
-        // Hotspots are defined with keypad on RIGHT (x starts at 704), so translate them
-        // In normal mode: hotspot at original x position
-        // In swapped mode: subtract GAME_SCREEN_WIDTH (704) to move to LEFT side
+        // Calculate hotspot position based on display mode and overlay position
         int hotspot_x = h->x;
-        if (display_swap) {
-            // Translate hotspot from RIGHT side to LEFT side
-            // Original x is ~750-883 (right side), new x should be ~46-179 (left side, same relative position)
-            hotspot_x = h->x - GAME_SCREEN_WIDTH;
+        
+        if (fullscreen_mode)
+        {
+            // FULLSCREEN MODE: Overlay can be on LEFT or RIGHT
+            // Hotspots are defined with overlay on RIGHT (x starts at 704), so translate if on LEFT
+            // In fullscreen normal: overlay on RIGHT, hotspot at original x position
+            // In fullscreen swapped: overlay on LEFT, subtract GAME_SCREEN_WIDTH (704) to move to LEFT side
+            if (fullscreen_overlay_on_left) {
+                // Translate hotspot from RIGHT side to LEFT side
+                // Original x is ~750-883 (right side), new x should be ~46-179 (left side, same relative position)
+                hotspot_x = h->x - GAME_SCREEN_WIDTH;
+            }
+        }
+        else
+        {
+            // DUAL-SCREEN MODE: Keypad can be on LEFT or RIGHT based on display_swap
+            // Hotspots are defined with keypad on RIGHT (x starts at 704), so translate them
+            // In normal mode: hotspot at original x position
+            // In swapped mode: subtract GAME_SCREEN_WIDTH (704) to move to LEFT side
+            if (display_swap) {
+                // Translate hotspot from RIGHT side to LEFT side
+                // Original x is ~750-883 (right side), new x should be ~46-179 (left side, same relative position)
+                hotspot_x = h->x - GAME_SCREEN_WIDTH;
+            }
         }
         
         // Check if mouse is over this hotspot
