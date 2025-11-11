@@ -54,7 +54,7 @@ The following PNG files should be placed in `system/FreeIntv_image_assets/`:
 - `default.png` - Default overlay when ROM-specific overlay is not found
 
 **Utility Buttons (Optional but recommended for UI):**
-- `button_swapscreen.png` - Swaps game and keypad positions in dual-screen mode
+- `button_toggle_layout.png` - Toggles game and keypad positions in dual-screen mode
 - `button_full_screen_toggle.png` - Toggles fullscreen mode in dual-screen mode
 - `button_full_screen_overlay.png` - Toggles overlay visibility in fullscreen mode
 
@@ -84,32 +84,115 @@ The following PNG files should be placed in `system/FreeIntv_image_assets/`:
 
 ## Download Core Assets
 
-You will need to download two separate ZIP files:
+You will need to download and set up two separate components:
 
-1. **Controller Templates & Buttons:**
-   - [FreeTS_Overlay Core Assets.zip](https://github.com/jcarr71/FreeIntvTSOverlay/releases/latest/download/FreeTS_Overlay_Core_Assets.zip)
+1. **Core Assets Archive:**
+   - [freeintv_image_assets.zip](https://github.com/jcarr71/FreeIntvTSOverlay/releases/latest/download/freeintv_image_assets.zip)
    - This contains the controller template, default keypad, and utility button PNGs.
 
-2. **Overlay PNGs:**
-   - [Overlays.zip](https://github.com/jcarr71/FreeIntvTSOverlay/releases/latest/download/Overlays.zip)
-   - This contains the actual overlays for individual games.
+2. **Overlay Archive:**
+   - [overlays.zip](https://github.com/jcarr71/FreeIntvTSOverlay/releases/latest/download/overlays.zip)
+   - This contains game-specific overlays for individual games.
 
-**Installation Instructions:**
-1. Download both ZIP files from the links above.
-2. Unzip the contents of each ZIP file.
-3. Copy all files and folders from both ZIPs into your `retroarch\system` directory.
-   - The overlays should end up in `retroarch\system\FreeIntvTS_Overlays`.
-4. Restart RetroArch if it is running.
+### Installation Instructions:
+1. **Extract freeintv_image_assets.zip to the system folder:**
+   - Download `freeintv_image_assets.zip`
+   - Extract it to your RetroArch `system` folder (same location where you placed `exec.bin` and `grom.bin`)
+   - This creates a `FreeIntv_image_assets` folder in your system directory
+   - Result: `retroarch/system/FreeIntv_image_assets/` contains `controller_base.png`, `default.png`, and button PNGs
 
-Your overlays and assets will now be available for use with the FreeIntvTSOverlay core.
+2. **Extract overlays.zip to the FreeIntv_image_assets folder:**
+   - Download `overlays.zip`
+   - Extract it into the `FreeIntv_image_assets` folder you just created
+   - This creates an `overlays` subfolder within `FreeIntv_image_assets`
+   - Result: `retroarch/system/FreeIntv_image_assets/overlays/` contains all game-specific overlay PNG files
+
+3. **Verify the folder structure:**
+   ```
+   retroarch/system/
+   ├── exec.bin
+   ├── grom.bin
+   └── FreeIntv_image_assets/
+       ├── controller_base.png
+       ├── default.png
+       ├── button_full_screen_toggle.png
+       ├── button_full_screen_overlay.png
+       ├── button_toggle_layout.png
+       └── overlays/
+           ├── 4-tris.png
+           ├── Astrosmash.png
+           ├── BattleCartridge.png
+           └── (other game overlays...)
+   ```
+
+4. **Restart RetroArch** if it is running.
+
+Your overlays and assets will now be available for use with the FreeIntv core.
 
 ## Touchscreen UI
 
 ## Touchscreen & Mouse Support
 - On Android, touch the keypad area to send input to the emulator.
 - On Windows and Linux, you can use the mouse to click on the keypad overlay and utility buttons. Mouse clicks are mapped to touch events, allowing full use of the overlay UI features.
-- Utility button (Swap Screen) is available below the game screen.
-- The "Swap Screen" button toggles the position of the game and keypad overlays.
+
+### Utility Buttons (Below Game Screen)
+
+The FreeIntv core provides three utility buttons in dual-screen mode:
+
+#### 1. Toggle Layout Button (`button_toggle_layout.png`)
+- **Function:** Switches the positions of the game screen and keypad overlay
+- **Usage:** Click this button to swap which side displays the game and which displays the keypad
+- **Use Case:** Convenient for left-handed players or adjusting layout preference without leaving the game
+
+#### 2. Fullscreen Toggle Button (`button_full_screen_toggle.png`)
+- **Function:** Switches between dual-screen mode and fullscreen game-only mode
+- **Usage:** Click to hide the keypad overlay and maximize game screen size
+- **Dual-Screen Mode:** Game (704×448 2x-scaled) + Keypad (370×600) side-by-side = 1074×600 total
+- **Fullscreen Mode:** Game screen expanded to fill the display; keypad overlay hidden
+- **Visual Indicator:** Button highlights yellow when pressed
+
+#### 3. Overlay Toggle Button (Fullscreen Mode Only) (`button_full_screen_overlay.png`)
+- **Function:** Toggles overlay visibility when in fullscreen mode
+- **Availability:** Only active and visible when fullscreen toggle has switched to fullscreen mode
+- **Usage:** Click to temporarily show/hide the keypad overlay in fullscreen mode
+  - **Show Overlay:** Press this button to display the keypad overlay on top of the fullscreen game
+  - **Hide Overlay:** Press again to hide the overlay and maximize game view
+- **Visual Feedback:** Keypad area highlights in green to show touch-active buttons when overlay is visible
+- **Dual-Screen Toggle:** If you press the "Toggle Layout" button while in fullscreen overlay mode, the keypad position swaps (left/right)
+
+### Utility Button Auto-Hide Feature (Fullscreen Mode)
+
+When in fullscreen mode, the utility buttons automatically hide after 5 seconds of inactivity to maximize game visibility:
+
+- **Auto-Hide Behavior:** The utility button strip (50 pixels tall) slides out of view 5 seconds after the last button press
+- **Bringing Buttons Back:** To reveal the hidden utility buttons, swipe or touch from the **bottom of the screen upward** (or click within the bottom 80 pixels of the screen)
+  - This gesture resets the auto-hide timer and brings the button strip back into view
+- **Timer Reset:** Any button press resets the 5-second countdown timer, so actively using buttons will keep them visible
+- **Why This Exists:** Maximizes game screen space during gameplay while keeping buttons accessible when needed
+
+### Fullscreen Mode Workflow
+
+1. **Start in Dual-Screen Mode** (default)
+   - See game on one side, keypad on the other
+   - All three utility buttons visible below game screen
+
+2. **Enter Fullscreen Mode**
+   - Click "Fullscreen Toggle" button
+   - Game expands to fill display; keypad hidden
+   - Utility buttons disappear (only visible in dual-screen mode)
+
+3. **Show Keypad in Fullscreen**
+   - Click "Overlay Toggle" button (appears when in fullscreen mode)
+   - Keypad overlay displays on top of game screen
+   - Touch keypad buttons to send input while seeing the full game
+
+4. **Toggle Keypad Position (Optional)**
+   - While in fullscreen overlay mode, click "Toggle Layout" to swap keypad left/right
+   - Useful if your usual keypad side is obscured by other UI elements
+
+5. **Exit Fullscreen**
+   - Click "Fullscreen Toggle" again to return to dual-screen mode
+   - Keypad overlay disappears and both screens display side-by-side
 
 ---
 

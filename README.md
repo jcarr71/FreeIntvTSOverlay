@@ -36,64 +36,52 @@ FreeIntv does not currently support Entertainment Computer System (ECS) function
 
 Mattel Intellivision games were often meant to be played with game-specific cards overlaid on the numeric keypad. These overlays convey information which can be very useful in gameplay. Images of a limited selection of Intellivision titles are available at: http://www.intellivisionlives.com/bluesky/games/instructions.shtml
 
-### Overlay PNG Files (Touchscreen)
-To use custom keypad and utility overlays with the touchscreen UI, download the required asset files:
+### Core Assets & Overlays Installation
 
-1. **Compiled Core Library:**
-  - [FreeIntv_libretro.zip](Assets/FreeIntv_libretro.zip)
-  - Pre-compiled core binaries for all platforms (Windows DLL, Linux SO, etc.)
+To use custom keypad and utility overlays with the touchscreen UI, you'll need to download and extract the asset files.
 
-2. **Controller Templates & Buttons:**
-  - [FreeIntv Core Assets.zip](Assets/FreeIntv%20Core%20Assets.zip)
-  - Contains the controller template, default keypad, and utility button PNGs.
+**Step 1: Download the Asset Files**
 
-3. **Overlay PNGs:**
-  - [Overlays.zip](Assets/Overlays.zip)
-  - Contains the actual overlays for individual games.
+- **freeintv_image_assets.zip** - Contains the controller template, default keypad, and utility button images
+- **overlays.zip** - Contains game-specific overlay images
 
-**Installation Instructions:**
+**Step 2: Extract to Your RetroArch System Folder**
 
-**Step 1: Download the ZIP files**
-- Download all 3 ZIP files from the links above.
+Extract `freeintv_image_assets.zip` to your RetroArch `system/` folder (where you store your BIOS files):
 
-**Step 2: Extract and Organize Files**
-- Extract `FreeIntv_libretro.zip` → Contains core binaries and `.info` file
-- Extract `FreeIntv Core Assets.zip` → Contains controller template and default keypad
-- Extract `Overlays.zip` → Contains game-specific overlays
+```
+retroarch/system/FreeIntv_image_assets/
+├── controller_base.png
+├── default.png
+├── button_toggle_layout.png
+└── [other utility button images]
+```
 
-**Step 3: Install Core Binary**
-- Place the core file for your platform into: `RetroArch/cores/`
-  - Windows: `FreeIntv_libretro.dll`
-  - Linux: `FreeIntv_libretro.so`
-  - macOS: `FreeIntv_libretro.dylib`
-- ⚠️ **Important:** If the core filename includes a platform identifier in brackets like `[Windows]FreeIntv_libretro.dll`, remove the brackets and platform name so it matches the info file: `FreeIntv_libretro.dll`
+Then, extract `overlays.zip` into the `FreeIntv_image_assets/` folder:
 
-**Step 4: Install Info File**
-- Copy `FreeIntv_libretro.info` to: `RetroArch/info/`
-- ⚠️ **Important:** The info filename must match the core filename exactly (excluding file extension)
+```
+retroarch/system/FreeIntv_image_assets/
+├── controller_base.png
+├── default.png
+├── button_toggle_layout.png
+├── overlays/
+│   ├── Astrosmash.png
+│   ├── Burger_Time.png
+│   ├── Las_Vegas_Poker_and_Blackjack.png
+│   └── [game-specific overlays...]
+└── [other utility button images]
+```
 
-**Step 5: Install Overlays**
-- Copy all files from both extracted archives to: `RetroArch/system/FreeIntv_image_assets/`
-  - Game overlays should be named to match your ROM files (e.g., `Astrosmash.png`)
-  - Required utility button PNG files:
-    - `button_swapscreen.png` - Swaps game and keypad positions in dual-screen mode
-    - `button_full_screen_toggle.png` - Toggles fullscreen mode
-    - `button_full_screen_overlay.png` - Toggles overlay visibility in fullscreen mode
-  - Required controller template PNG files:
-    - `controller_base.png` - Base keypad template layer
-    - `default.png` - Default overlay if ROM-specific overlay not found
+**File Structure Summary:**
 
-**Step 6: Refresh RetroArch**
-- Delete RetroArch's info cache (usually in `RetroArch/system/` or config folder)
-- Restart RetroArch to load the new core  
+| Location | Content |
+| --- | --- |
+| `system/FreeIntv_image_assets/` | Controller template, default keypad, utility buttons |
+| `system/FreeIntv_image_assets/overlays/` | Game-specific overlay PNG files (named to match ROM filenames) |
 
-Recommended naming: ensure the PNG filename matches the ROM filename (excluding extension).
-### Overlay PNG Files (Touchscreen & Mouse)
-To use custom keypad and utility overlays with the touchscreen UI, place your PNG files in the following directory:
-
-  retroarch/system/FreeIntv_image_assets/
-
-Recommended naming: ensure the PNG filename matches the ROM filename (excluding extension).
+**Recommended naming:** ensure game overlay PNG filenames match your ROM filenames (excluding extension). For example:
+- ROM: `Astrosmash.intv` → Overlay: `Astrosmash.png`
+- ROM: `Burgertime.bin` → Overlay: `Burgertime.png`
 
 #### Touch and Mouse Input
 - On Android, touch the keypad and utility buttons directly.
@@ -106,9 +94,13 @@ Recommended naming: ensure the PNG filename matches the ROM filename (excluding 
 
 ### Android Touchscreen Controls *(New)*
 * **Touchscreen Keypad** - Touch any of the 12 buttons (1-9, *, 0, #) on the right side of the screen to input commands directly
-* **Utility Buttons** - Quick access buttons below the game screen:
-  - **Swap Screen** - Toggle game/keypad positions (fully implemented)
+* **Utility Buttons** - Quick access buttons below the game screen (in dual-screen mode):
+  - **Toggle Layout** - Switch game/keypad positions
+  - **Fullscreen Toggle** - Switch between dual-screen mode and fullscreen game-only view
+  - **Overlay Toggle** - Show/hide keypad overlay when in fullscreen mode
+* **Auto-Hide in Fullscreen** - Utility buttons automatically hide after 5 seconds of inactivity; swipe up from the bottom of the screen to reveal them
 * **Visual Feedback** - Button presses show green highlighting on keypad buttons, yellow on utility buttons
+* **Fullscreen Overlay Mode** - When fullscreen is active, click the overlay button to display the keypad on top of the game, then click "Toggle Layout" to swap its position if needed
 
 ### RetroPad Mapping
 

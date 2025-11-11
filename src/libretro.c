@@ -77,7 +77,7 @@
 #define RETROARCH_SCREENSHOT 1008
 #define RETROARCH_TOGGLE_DISPLAY 1009
 
-#define UTILITY_BUTTON_COUNT 7  // Increased from 6 to include fullscreen button
+#define UTILITY_BUTTON_COUNT 8  // Increased to 8 for fullscreen overlay toggle button (index 7)
 #define MENU_BUTTON_WIDTH 200
 #define MENU_BUTTON_HEIGHT 50
 
@@ -117,22 +117,23 @@ overlay_hotspot_t overlay_hotspots[OVERLAY_HOTSPOT_COUNT];
 // Available space: X=0-704 (704px = same as game width), Y=448-600 (152px height)
 // Spacing calculation for even distribution:
 // - Top gap: 17px (Y=448 to 465)
-// - Button 2 (Swap): 50px (Y=465 to 515)
+// - Button 2 (Toggle Layout): 50px (Y=465 to 515)
 // - Middle gap: 17px (Y=515 to 532)
 // - Button 0 (Fullscreen): 50px (Y=532 to 582)
 // - Bottom gap: 18px (Y=582 to 600)
-// - Swap Screen (Button 2) on top row (Y=465)
+// - Toggle Layout (Button 2) on top row (Y=465)
 // - Fullscreen (Button 0) on bottom row (Y=532)
 // Note: Not all buttons are rendered/loaded - see render_dual_screen() for enabled buttons
 static utility_button_t utility_buttons[UTILITY_BUTTON_COUNT] = {
     // Currently active buttons - CENTERED ON SEPARATE ROWS WITH EVEN SPACING
     {252, 532, MENU_BUTTON_WIDTH, MENU_BUTTON_HEIGHT, "Fullscreen", 0},                                        // Button 0: Fullscreen Toggle (BOTTOM CENTER)
     {0, 0, 0, 0, "", 0},                                                                                        // Button 1: Empty (reserved)
-    {252, 465, MENU_BUTTON_WIDTH, MENU_BUTTON_HEIGHT, "Swap", 0},                                              // Button 2: Swap Screen (TOP CENTER)
+    {252, 465, MENU_BUTTON_WIDTH, MENU_BUTTON_HEIGHT, "Toggle Layout", 0},                                       // Button 2: Toggle Layout (TOP CENTER)
     {0, 0, 0, 0, "", 0},                                                                                        // Button 3: Empty (reserved)
     {0, 0, 0, 0, "", 0},                                                                                        // Button 4: Empty (reserved)
     {0, 0, 0, 0, "", 0},                                                                                        // Button 5: Empty (reserved)
-    {0, 0, 0, 0, "", 0}                                                                                         // Button 6: Empty (reserved)
+    {0, 0, 0, 0, "", 0},                                                                                        // Button 6: Empty (reserved)
+    {0, 0, 0, 0, "", 0}                                                                                         // Button 7: Overlay Toggle (fullscreen only)
 };
 
 // Display system variables
@@ -200,7 +201,7 @@ static int controller_base_width = 446;
 static int controller_base_height = 620;
 
 // Individual button images for utility buttons (6 separate PNGs)
-// Top row: button_ra_menu.png, button_quit.png, button_swapscreen.png
+// Top row: button_ra_menu.png, button_quit.png, button_toggle_layout.png
 // Bottom row: button_save.png, button_load.png, button_screenshot.png
 static struct {
     unsigned int* buffer;
@@ -210,7 +211,7 @@ static struct {
 } utility_button_images[UTILITY_BUTTON_COUNT] = {
     {NULL, 0, 0, 0},  // Button 0: button_full_screen_toggle.png (Fullscreen)
     {NULL, 0, 0, 0},  // Button 1: Empty (reserved)
-    {NULL, 0, 0, 0},  // Button 2: button_swapscreen.png (Swap)
+    {NULL, 0, 0, 0},  // Button 2: button_toggle_layout.png (Toggle Layout)
     {NULL, 0, 0, 0},  // Button 3: Empty (reserved)
     {NULL, 0, 0, 0},  // Button 4: Empty (reserved)
     {NULL, 0, 0, 0},  // Button 5: Empty (reserved)
@@ -228,7 +229,7 @@ static struct {
 static const char* button_filenames[UTILITY_BUTTON_COUNT] = {
     "button_full_screen_toggle.png",
     "",
-    "button_swapscreen.png",
+    "button_toggle_layout.png",
     "",
     "",
     "",
@@ -382,7 +383,7 @@ static void load_utility_buttons(void)
     }
     
     for (int i = 0; i < UTILITY_BUTTON_COUNT; i++) {
-        // ENABLED: Load button 0 (fullscreen toggle) and button 2 (swap screen)
+        // ENABLED: Load button 0 (fullscreen toggle) and button 2 (toggle layout)
         // All other utility buttons are disabled
         if (i != 0 && i != 2) {
             // Skip loading for disabled buttons
@@ -520,8 +521,8 @@ static void build_overlay_path(const char* rom_path, char* overlay_path, size_t 
     // Detect path separator based on system_dir content
     char sep = strchr(system_dir, '/') ? '/' : '\\';
     snprintf(overlay_path, overlay_path_size, 
-             "%s%cFreeIntv_image_assets%c%.*s.png",
-             system_dir, sep, sep, (int)name_len, filename);
+             "%s%cFreeIntv_image_assets%coverlays%c%.*s.png",
+             system_dir, sep, sep, sep, (int)name_len, filename);
     printf("[DEBUG] ROM overlay path (sep=%c): %s\n", sep, overlay_path);
 }
 
@@ -772,14 +773,14 @@ static void render_dual_screen(void)
             }
             
             // Draw utility buttons in the strip
-            // Show 3 buttons in fullscreen mode: Exit (Button 0), Show Overlay (Button 7), and Swap (Button 2)
+            // Show 3 buttons in fullscreen mode: Exit (Button 0), Show Overlay (Button 7), and Toggle Layout (Button 2)
             // Position them at: 1/4, 1/2, and 3/4 of workspace width
             int button_y = strip_y + (FULLSCREEN_STRIP_HEIGHT - MENU_BUTTON_HEIGHT) / 2;
             
             // Button positions for fullscreen strip (3 buttons evenly spaced)
             int button_x_pos[3];
             button_x_pos[0] = (WORKSPACE_WIDTH / 4) - (MENU_BUTTON_WIDTH / 2);        // 1/4 - Exit
-            button_x_pos[1] = (WORKSPACE_WIDTH / 2) - (MENU_BUTTON_WIDTH / 2);        // 1/2 - Swap
+            button_x_pos[1] = (WORKSPACE_WIDTH / 2) - (MENU_BUTTON_WIDTH / 2);        // 1/2 - Toggle Layout
             button_x_pos[2] = (3 * WORKSPACE_WIDTH / 4) - (MENU_BUTTON_WIDTH / 2);    // 3/4 - Show Overlay
             
             // Button 0: Exit fullscreen
@@ -902,7 +903,7 @@ static void render_dual_screen(void)
                 }
             }
             
-            // Button 2: Swap overlay left/right in fullscreen
+            // Button 2: Toggle layout overlay left/right in fullscreen
             button_x = button_x_pos[1];
             
             // Try to render button 2 PNG image if loaded
@@ -1053,7 +1054,7 @@ static void render_dual_screen(void)
                 }
             }
             
-            // Highlight swap button if pressed
+            // Highlight toggle layout button if pressed
             if (utility_button_pressed[2]) {
                 unsigned int highlight_color = 0x88FFFF00;
                 int btn_x = button_x_pos[1];
@@ -1233,7 +1234,7 @@ static void render_dual_screen(void)
     
     if (buttons_loaded > 0) {
         for (int i = 0; i < UTILITY_BUTTON_COUNT; i++) {
-            // Render button 0 (fullscreen toggle) and button 2 (swap screen)
+            // Render button 0 (fullscreen toggle) and button 2 (toggle layout)
             // All other utility buttons are disabled and not rendered
             if (i != 0 && i != 2) {
                 continue;
@@ -1292,7 +1293,7 @@ static void render_dual_screen(void)
         
         // === UTILITY BUTTON HIGHLIGHTING WHEN PRESSED ===
         for (int i = 0; i < UTILITY_BUTTON_COUNT; i++) {
-            // Highlight buttons 0 (fullscreen toggle) and 2 (swap screen)
+            // Highlight buttons 0 (fullscreen toggle) and 2 (toggle layout)
             // All other utility buttons are disabled
             if (i != 0 && i != 2) {
                 continue;
@@ -1732,8 +1733,8 @@ static void process_utility_button_input(void)
                             fullscreen_hide_timer = 0;
                         }
                         break;
-                    case 2:  // Swap screen button
-                        debug_log("[BUTTON] Swap screen button pressed at x=%d y=%d", mouse_x, mouse_y);
+                    case 2:  // Toggle layout button
+                        debug_log("[BUTTON] Toggle layout button pressed at x=%d y=%d", mouse_x, mouse_y);
                         display_swap = !display_swap;
                         break;
                 }
