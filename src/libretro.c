@@ -147,8 +147,10 @@ static int display_swap = 0;  // 0 = game left/keypad right, 1 = game right/keyp
 static int fullscreen_mode = 0;  // 0 = dual screen, 1 = fullscreen game only
 static int fullscreen_strip_visible = 0;  // 1 = show bottom control strip, 0 = hidden
 static int fullscreen_hide_timer = 0;  // Countdown timer for auto-hiding strip
+static int fullscreen_bar_pinned = 0;  // 0 = auto-hide when not touching, 1 = always visible
 static int overlay_visible_in_fullscreen = 0;  // 0 = hidden (default), 1 = show transparent overlay on game in fullscreen
 static int fullscreen_overlay_on_left = 0;  // 0 = overlay on right (default), 1 = overlay on left
+static int fullscreen_keypad_opacity = 40;  // Opacity percentage: 20, 40, 60, 80, 100
 
 // Keypad scaling in fullscreen mode
 static float keypad_scale_factor = 1.0f;  // Scale factor for keypad in fullscreen (1.0 = original 370x600 size)
@@ -235,6 +237,14 @@ static struct {
     int height;
 } button_fullscreen_overlay_image = {NULL, 0, 0, 0};
 
+// Fullscreen exit button image (only loaded/used in fullscreen mode)
+static struct {
+    unsigned int* buffer;
+    int loaded;
+    int width;
+    int height;
+} button_fullscreen_exit_image = {NULL, 0, 0, 0};
+
 static const char* button_filenames[UTILITY_BUTTON_COUNT] = {
     "button_full_screen_toggle.png",
     "",
@@ -247,6 +257,9 @@ static const char* button_filenames[UTILITY_BUTTON_COUNT] = {
 
 // Fullscreen strip button image filename
 static const char* button_fullscreen_overlay_filename = "button_full_screen_overlay.png";
+
+// Fullscreen-specific button 0 (exit fullscreen) image
+static const char* button_fullscreen_exit_filename = "button_multi_screen_toggle.png";
 
 // Initialize overlay hotspots for keypad (positioned on RIGHT side)
 // scale_factor: 1.0 = original size (370x600), < 1.0 = scaled down for fullscreen
@@ -481,6 +494,44 @@ static void load_utility_buttons(void)
             }
         } else {
             printf("[FULLSCREEN_OVERLAY_BUTTON] Failed to load fullscreen_overlay.png from %s\n", overlay_btn_path);
+        }
+    }
+    
+    // Load fullscreen exit button image
+    if (!button_fullscreen_exit_image.loaded) {
+        char exit_btn_path[512];
+        build_system_overlay_path(exit_btn_path, sizeof(exit_btn_path), button_fullscreen_exit_filename);
+
+        
+        int width, height, channels;
+        unsigned char* img_data = stbi_load(exit_btn_path, &width, &height, &channels, 4);
+        
+        if (img_data) {
+            printf("[FULLSCREEN_EXIT_BUTTON] Loaded fullscreen exit button: %dx%d\n", width, height);
+            button_fullscreen_exit_image.width = width;
+            button_fullscreen_exit_image.height = height;
+            
+            if (!button_fullscreen_exit_image.buffer) {
+                button_fullscreen_exit_image.buffer = (unsigned int*)malloc(width * height * sizeof(unsigned int));
+            }
+            
+            if (button_fullscreen_exit_image.buffer) {
+                for (int y = 0; y < height; y++) {
+                    for (int x = 0; x < width; x++) {
+                        unsigned char* pixel = img_data + (y * width + x) * 4;
+                        unsigned int alpha = pixel[3];
+                        unsigned int r = pixel[0];
+                        unsigned int g = pixel[1];
+                        unsigned int b = pixel[2];
+                        button_fullscreen_exit_image.buffer[y * width + x] = (alpha << 24) | (r << 16) | (g << 8) | b;
+                    }
+                }
+                button_fullscreen_exit_image.loaded = 1;
+                stbi_image_free(img_data);
+                printf("[FULLSCREEN_EXIT_BUTTON] Fullscreen exit button loaded successfully\n");
+            }
+        } else {
+            printf("[FULLSCREEN_EXIT_BUTTON] Failed to load button_multi_screen_toggle.png from %s\n", exit_btn_path);
         }
     }
 }
@@ -749,8 +800,8 @@ static void render_dual_screen(void)
                         unsigned int overlay_alpha = (overlay_pixel >> 24) & 0xFF;
                         
                         if (overlay_alpha > 0) {
-                            // Apply 40% opacity to overlay
-                            unsigned int final_alpha = (overlay_alpha * 40) / 100;
+                            // Apply configurable opacity to overlay
+                            unsigned int final_alpha = (overlay_alpha * fullscreen_keypad_opacity) / 100;
                             unsigned int inv_alpha = 255 - final_alpha;
                             
                             unsigned int existing = dual_buffer[workspace_y * WORKSPACE_WIDTH + workspace_x];
@@ -801,8 +852,8 @@ static void render_dual_screen(void)
                             unsigned int base_alpha = (base_pixel >> 24) & 0xFF;
                             
                             if (base_alpha > 0) {
-                                // Apply 40% opacity to controller base
-                                unsigned int final_alpha = (base_alpha * 40) / 100;
+                                // Apply configurable opacity to controller base
+                                unsigned int final_alpha = (base_alpha * fullscreen_keypad_opacity) / 100;
                                 unsigned int inv_alpha = 255 - final_alpha;
                                 
                                 unsigned int existing = dual_buffer[workspace_y * WORKSPACE_WIDTH + workspace_x];
@@ -841,6 +892,73 @@ static void render_dual_screen(void)
                 }
             }
             
+            // === PIN BUTTON on far left ===
+            // Small circle button to toggle auto-hide behavior
+            int pin_radius = 8;  // Small circle
+            int pin_x = pin_radius + 10;  // 10 pixels from left edge
+            int pin_y = strip_y + (FULLSCREEN_STRIP_HEIGHT / 2);  // Centered vertically in strip
+            unsigned int pin_outline_color = 0xFFFFFFFF;  // White outline
+            unsigned int pin_fill_color = 0xFF00FF00;    // Green fill when pinned
+            
+            // Draw circle outline
+            for (int y = pin_y - pin_radius; y <= pin_y + pin_radius; y++) {
+                for (int x = pin_x - pin_radius; x <= pin_x + pin_radius; x++) {
+                    if (x >= 0 && x < WORKSPACE_WIDTH && y >= 0 && y < WORKSPACE_HEIGHT) {
+                        int dx = x - pin_x;
+                        int dy = y - pin_y;
+                        int dist_sq = dx * dx + dy * dy;
+                        
+                        // Draw outline (within 1 pixel of circle edge)
+                        if (dist_sq <= (pin_radius + 1) * (pin_radius + 1) && 
+                            dist_sq >= (pin_radius - 1) * (pin_radius - 1)) {
+                            dual_buffer[y * WORKSPACE_WIDTH + x] = pin_outline_color;
+                        }
+                        // Fill circle if pinned
+                        else if (fullscreen_bar_pinned && dist_sq <= pin_radius * pin_radius) {
+                            dual_buffer[y * WORKSPACE_WIDTH + x] = pin_fill_color;
+                        }
+                    }
+                }
+            }
+            
+            // === OPACITY DOTS on far right ===
+            // 5 small circles for opacity adjustment: 20%, 40%, 60%, 80%, 100%
+            int opacity_values[5] = {20, 40, 60, 80, 100};
+            int dot_radius = 5;
+            int dot_spacing = 14;  // Space between dots
+            int dots_start_x = WORKSPACE_WIDTH - (5 * dot_spacing) - 10;  // 10 pixels from right edge
+            int dots_y = strip_y + (FULLSCREEN_STRIP_HEIGHT / 2);
+            
+            for (int i = 0; i < 5; i++) {
+                int dot_x = dots_start_x + (i * dot_spacing);
+                unsigned int dot_outline_color = 0xFFFFFFFF;  // White outline
+                unsigned int dot_fill_color = 0xFF00AAFF;    // Blue fill for selected
+                
+                // Check if this is the current opacity level
+                int is_selected = (fullscreen_keypad_opacity == opacity_values[i]);
+                
+                // Draw dot outline and fill
+                for (int y = dots_y - dot_radius; y <= dots_y + dot_radius; y++) {
+                    for (int x = dot_x - dot_radius; x <= dot_x + dot_radius; x++) {
+                        if (x >= 0 && x < WORKSPACE_WIDTH && y >= 0 && y < WORKSPACE_HEIGHT) {
+                            int dx = x - dot_x;
+                            int dy = y - dots_y;
+                            int dist_sq = dx * dx + dy * dy;
+                            
+                            // Draw outline
+                            if (dist_sq <= (dot_radius + 1) * (dot_radius + 1) && 
+                                dist_sq >= (dot_radius - 1) * (dot_radius - 1)) {
+                                dual_buffer[y * WORKSPACE_WIDTH + x] = dot_outline_color;
+                            }
+                            // Fill dot if selected
+                            else if (is_selected && dist_sq <= dot_radius * dot_radius) {
+                                dual_buffer[y * WORKSPACE_WIDTH + x] = dot_fill_color;
+                            }
+                        }
+                    }
+                }
+            }
+            
             // Draw utility buttons in the strip
             // Show 3 buttons in fullscreen mode: Exit (Button 0), Show Overlay (Button 7), and Toggle Layout (Button 2)
             // Position them at: 1/4, 1/2, and 3/4 of workspace width
@@ -855,10 +973,10 @@ static void render_dual_screen(void)
             // Button 0: Exit fullscreen
             int button_x = button_x_pos[0];
             
-            // Try to render button 0 PNG image if loaded
-            if (utility_button_images[0].loaded && utility_button_images[0].buffer) {
-                int img_width = utility_button_images[0].width;
-                int img_height = utility_button_images[0].height;
+            // Try to render button 0 PNG image if loaded (use fullscreen-specific image in fullscreen mode)
+            if (button_fullscreen_exit_image.loaded && button_fullscreen_exit_image.buffer) {
+                int img_width = button_fullscreen_exit_image.width;
+                int img_height = button_fullscreen_exit_image.height;
                 
                 // Blit button image to fullscreen strip
                 for (int img_y = 0; img_y < img_height; img_y++) {
@@ -869,7 +987,7 @@ static void render_dual_screen(void)
                         if (workspace_x >= WORKSPACE_WIDTH || workspace_y >= WORKSPACE_HEIGHT) continue;
                         if (workspace_x < 0) continue;
                         
-                        unsigned int button_pixel = utility_button_images[0].buffer[img_y * img_width + img_x];
+                        unsigned int button_pixel = button_fullscreen_exit_image.buffer[img_y * img_width + img_x];
                         unsigned int alpha = (button_pixel >> 24) & 0xFF;
                         
                         if (alpha > 0) {
@@ -1698,9 +1816,11 @@ static void process_utility_button_input(void)
         int bottom_touch_zone_y = WORKSPACE_HEIGHT - FULLSCREEN_TOUCH_ZONE;
         if (mouse_y >= bottom_touch_zone_y && mouse_y < WORKSPACE_HEIGHT)
         {
-            // User touched near bottom - show strip and reset timer
+            // User touched near bottom - show strip and reset timer (unless pinned)
             fullscreen_strip_visible = 1;
-            fullscreen_hide_timer = FULLSCREEN_HIDE_DELAY;
+            if (!fullscreen_bar_pinned) {
+                fullscreen_hide_timer = FULLSCREEN_HIDE_DELAY;
+            }
             
             if (mouse_button && fullscreen_strip_visible)
             {
@@ -1708,6 +1828,68 @@ static void process_utility_button_input(void)
                 int strip_y = WORKSPACE_HEIGHT - FULLSCREEN_STRIP_HEIGHT;
                 button_y_pos = strip_y + (FULLSCREEN_STRIP_HEIGHT - MENU_BUTTON_HEIGHT) / 2;
                 int button_y = button_y_pos;  // Local reference
+                
+                // Check PIN BUTTON first (far left)
+                static int pin_button_pressed = 0;  // Moved outside if/else to track state correctly
+                int pin_radius = 8;
+                int pin_x = pin_radius + 10;  // 10 pixels from left edge
+                int pin_y = strip_y + (FULLSCREEN_STRIP_HEIGHT / 2);
+                
+                int dx = mouse_x - pin_x;
+                int dy = mouse_y - pin_y;
+                int dist_sq = dx * dx + dy * dy;
+                
+                if (dist_sq <= (pin_radius + 2) * (pin_radius + 2))  // Touch area slightly larger than visual
+                {
+                    if (!pin_button_pressed)
+                    {
+                        pin_button_pressed = 1;
+                        fullscreen_bar_pinned = !fullscreen_bar_pinned;
+                        debug_log("[FULLSCREEN_PIN] Pin button toggled, bar now %s", 
+                                  fullscreen_bar_pinned ? "PINNED" : "AUTO-HIDE");
+                    }
+                }
+                else
+                {
+                    pin_button_pressed = 0;
+                }
+                
+                // Check OPACITY DOTS (far right)
+                int opacity_values[5] = {20, 40, 60, 80, 100};
+                int dot_radius = 5;
+                int dot_spacing = 14;
+                int dots_start_x = WORKSPACE_WIDTH - (5 * dot_spacing) - 10;
+                int dots_y = strip_y + (FULLSCREEN_STRIP_HEIGHT / 2);
+                
+                static int last_opacity_dot_index = -1;  // Track which dot was last pressed (-1 = none)
+                int current_dot_hit = -1;  // Which dot we're currently touching
+                
+                // Check if we're touching any opacity dot
+                for (int i = 0; i < 5; i++) {
+                    int dot_x = dots_start_x + (i * dot_spacing);
+                    int dx_dot = mouse_x - dot_x;
+                    int dy_dot = mouse_y - dots_y;
+                    int dist_sq_dot = dx_dot * dx_dot + dy_dot * dy_dot;
+                    
+                    if (dist_sq_dot <= (dot_radius + 3) * (dot_radius + 3)) {  // Touch area slightly larger
+                        current_dot_hit = i;
+                        break;
+                    }
+                }
+                
+                // Only update opacity on transition from not touching to touching
+                if (current_dot_hit >= 0 && last_opacity_dot_index != current_dot_hit) {
+                    fullscreen_keypad_opacity = opacity_values[current_dot_hit];
+                    debug_log("[FULLSCREEN_OPACITY] Opacity set to %d%% (dot %d)", fullscreen_keypad_opacity, current_dot_hit);
+                }
+                
+                // Update last touched dot
+                if (current_dot_hit >= 0) {
+                    last_opacity_dot_index = current_dot_hit;
+                } else if (!mouse_button) {
+                    // Reset when not touching anything and button is released
+                    last_opacity_dot_index = -1;
+                }
                 
                 // Button positions for fullscreen strip (3 buttons evenly spaced)
                 button_x_pos[0] = (WORKSPACE_WIDTH / 4) - (MENU_BUTTON_WIDTH / 2);        // 1/4 - Exit
@@ -1797,8 +1979,8 @@ static void process_utility_button_input(void)
         }
         else
         {
-            // Touch away from bottom zone - start countdown to hide strip
-            if (fullscreen_strip_visible && !mouse_button) {
+            // Touch away from bottom zone - start countdown to hide strip (unless pinned)
+            if (fullscreen_strip_visible && !mouse_button && !fullscreen_bar_pinned) {
                 fullscreen_hide_timer--;
                 if (fullscreen_hide_timer <= 0) {
                     fullscreen_strip_visible = 0;
@@ -1865,17 +2047,20 @@ static void process_utility_button_input(void)
                         if (fullscreen_mode) {
                             // Entering fullscreen - show strip initially
                             fullscreen_strip_visible = 1;
-                            fullscreen_hide_timer = FULLSCREEN_HIDE_DELAY;
+                            // If bar was pinned, keep timer high; otherwise use normal delay
+                            fullscreen_hide_timer = fullscreen_bar_pinned ? FULLSCREEN_HIDE_DELAY : FULLSCREEN_HIDE_DELAY;
                             // Calculate scale factor for fullscreen with visible strip
                             int game_height = WORKSPACE_HEIGHT - FULLSCREEN_STRIP_HEIGHT;
                             float scale = (float)game_height / KEYPAD_HEIGHT;
                             init_overlay_hotspots(scale);
+                            debug_log("[FULLSCREEN_ENTER] Pin state=%d, timer=%d", fullscreen_bar_pinned, fullscreen_hide_timer);
                         } else {
-                            // Exiting fullscreen - hide strip
+                            // Exiting fullscreen - hide strip but preserve pin state
                             fullscreen_strip_visible = 0;
                             fullscreen_hide_timer = 0;
                             // Reinitialize hotspots for dual-screen (always 1.0 scale)
                             init_overlay_hotspots(1.0f);
+                            debug_log("[FULLSCREEN_EXIT] Pin state preserved=%d", fullscreen_bar_pinned);
                         }
                         break;
                     case 2:  // Toggle layout button
@@ -2230,7 +2415,8 @@ void retro_run(void)
 	InputPoll();
 	
 	// Update fullscreen mode timer
-	if (fullscreen_mode && fullscreen_strip_visible && fullscreen_hide_timer > 0) {
+	// Only auto-hide if NOT pinned
+	if (fullscreen_mode && fullscreen_strip_visible && !fullscreen_bar_pinned && fullscreen_hide_timer > 0) {
 		fullscreen_hide_timer--;
 		if (fullscreen_hide_timer <= 0) {
 			fullscreen_strip_visible = 0;
