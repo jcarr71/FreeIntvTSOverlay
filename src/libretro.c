@@ -150,6 +150,15 @@ static int fullscreen_hide_timer = 0;  // Countdown timer for auto-hiding strip
 static int overlay_visible_in_fullscreen = 0;  // 0 = hidden (default), 1 = show transparent overlay on game in fullscreen
 static int fullscreen_overlay_on_left = 0;  // 0 = overlay on right (default), 1 = overlay on left
 
+// Keypad scaling in fullscreen mode
+static float keypad_scale_factor = 1.0f;  // Scale factor for keypad in fullscreen (1.0 = original 370x600 size)
+static int scaled_keypad_width = 370;     // Scaled keypad width for fullscreen
+static int scaled_keypad_height = 600;    // Scaled keypad height for fullscreen
+
+// Utility button positions in fullscreen (for highlights)
+static int button_x_pos[3] = {0};  // Positions of buttons 0, 1, 2 in fullscreen strip
+static int button_y_pos = 0;       // Y position of utility buttons in fullscreen strip
+
 // Hotspot input tracking
 static int hotspot_pressed[OVERLAY_HOTSPOT_COUNT] = {0};  // Track which hotspots are currently pressed
 
@@ -240,35 +249,43 @@ static const char* button_filenames[UTILITY_BUTTON_COUNT] = {
 static const char* button_fullscreen_overlay_filename = "button_full_screen_overlay.png";
 
 // Initialize overlay hotspots for keypad (positioned on RIGHT side)
-static void init_overlay_hotspots(void)
+// scale_factor: 1.0 = original size (370x600), < 1.0 = scaled down for fullscreen
+static void init_overlay_hotspots(float scale_factor)
 {
-    printf("[INIT] Initializing overlay hotspots (horizontal layout)...\n");
+    printf("[INIT] Initializing overlay hotspots (scale=%.2f)...\n", scale_factor);
     fflush(stdout);
     
     // Layout: 4 rows x 3 columns, positioned on RIGHT side of workspace
-    int hotspot_w = OVERLAY_HOTSPOT_SIZE;
-    int hotspot_h = OVERLAY_HOTSPOT_SIZE;
-    int gap_x = 28;
-    int gap_y = 29;
+    // Scale the hotspot sizes and gaps based on scale_factor
+    int hotspot_w = (int)(OVERLAY_HOTSPOT_SIZE * scale_factor);
+    int hotspot_h = (int)(OVERLAY_HOTSPOT_SIZE * scale_factor);
+    int gap_x = (int)(28 * scale_factor);
+    int gap_y = (int)(29 * scale_factor);
     int rows = 4;
     int cols = 3;
     
-    // Position keypad on right side: start at GAME_SCREEN_WIDTH
-    int keypad_x_offset = GAME_SCREEN_WIDTH;
-    int keypad_y_offset = 0;  // Align to top of keypad region
+    // Scaled keypad and controller dimensions
+    int scaled_keypad_w = (int)(KEYPAD_WIDTH * scale_factor);
+    int scaled_keypad_h = (int)(KEYPAD_HEIGHT * scale_factor);
+    int scaled_ctrl_base_w = (int)(controller_base_width * scale_factor);
+    int scaled_ctrl_base_h = (int)(controller_base_height * scale_factor);
     
-    // IMPORTANT: Controller base is 446px wide, centered in 370px keypad space
-    // This creates a left/right margin of (370 - 446) / 2 = -38px (extends beyond)
-    // Hotspots must account for this centering offset
-    int ctrl_base_x_offset = (KEYPAD_WIDTH - controller_base_width) / 2;  // = -38
+    // Calculate hotspots relative to keypad area (not absolute workspace)
+    // This makes them independent of whether keypad is on left/right or scaled
     
-    // Center hotspots within the ACTUAL controller base (446px), not the keypad space
-    int hotspots_width = 3 * hotspot_w + 2 * gap_x;  // 266
-    int hotspots_x_in_base = (controller_base_width - hotspots_width) / 2;  // center in 446px
-    int top_margin = 183;  // From DS version: hotspots start 183px from top of workspace
+    // IMPORTANT: Controller base is scaled proportionally
+    // This creates the same proportional centering offset
+    int ctrl_base_x_offset = (scaled_keypad_w - scaled_ctrl_base_w) / 2;
     
-    int start_x = keypad_x_offset + ctrl_base_x_offset + hotspots_x_in_base;
-    int start_y = keypad_y_offset + top_margin;
+    // Center hotspots within the ACTUAL scaled controller base
+    int hotspots_width = 3 * hotspot_w + 2 * gap_x;
+    int hotspots_x_in_base = (scaled_ctrl_base_w - hotspots_width) / 2;
+    int top_margin = (int)(183 * scale_factor);  // Scaled top margin
+    
+    // Positions are relative to the keypad area (0 = left edge of keypad)
+    // NOT relative to GAME_SCREEN_WIDTH or workspace
+    int start_x = ctrl_base_x_offset + hotspots_x_in_base;
+    int start_y = top_margin;
     
     int keypad_map[12] = { K_1, K_2, K_3, K_4, K_5, K_6, K_7, K_8, K_9, K_C, K_0, K_E };
     
@@ -281,13 +298,13 @@ static void init_overlay_hotspots(void)
             overlay_hotspots[idx].height = hotspot_h;
             overlay_hotspots[idx].id = idx + 1;
             overlay_hotspots[idx].keypad_code = keypad_map[idx];
-            printf("[INIT] Hotspot %d: pos=(%d,%d), size=%dx%d, keypad_code=0x%02X\n",
+            printf("[INIT] Hotspot %d: pos=(%d,%d), size=%dx%d, keypad_code=0x%02X (relative to keypad)\n",
                    idx, overlay_hotspots[idx].x, overlay_hotspots[idx].y,
                    overlay_hotspots[idx].width, overlay_hotspots[idx].height,
                    overlay_hotspots[idx].keypad_code);
         }
     }
-    printf("[INIT] Hotspot initialization complete!\n");
+    printf("[INIT] Hotspot initialization complete! (scale=%.2f)\n", scale_factor);
     fflush(stdout);
 }
 
@@ -577,7 +594,7 @@ static void load_overlay_for_rom(const char* rom_path)
                     overlay_buffer[y * width + x] = (alpha << 24) | (r << 16) | (g << 8) | b;
                 }
             }
-            init_overlay_hotspots();
+            init_overlay_hotspots(1.0f);  // Initialize with normal scale (1.0 = full size)
         }
         stbi_image_free(img_data);
     } else {
@@ -667,24 +684,68 @@ static void render_dual_screen(void)
             }
         }
         
+        // Calculate keypad scale factor for fullscreen mode
+        // When utility bar is visible, scale keypad down to fit in remaining vertical space
+        // When utility bar is hidden, keypad stays at full 600px height
+        float keypad_scale = 1.0f;  // Default to full size
+        int keypad_y_offset = 0;    // Default to top
+        
+        if (fullscreen_strip_visible) {
+            // Utility bar is visible - scale keypad to fit in remaining space above the bar
+            // Available height for keypad = game_height (which is WORKSPACE_HEIGHT - FULLSCREEN_STRIP_HEIGHT)
+            // Keypad should scale to fit this height while maintaining 370:600 aspect ratio
+            float scale_to_fit_height = (float)game_height / KEYPAD_HEIGHT;
+            keypad_scale = scale_to_fit_height;
+            keypad_y_offset = 0;  // Keypad at top, game scales down and sits above utility bar
+        }
+        // else: keypad_scale stays 1.0f and keypad_y_offset stays 0 (full size, full height)
+        
+        // Store scale factor and scaled dimensions for touch input processing
+        keypad_scale_factor = keypad_scale;
+        scaled_keypad_width = (int)(KEYPAD_WIDTH * keypad_scale);
+        scaled_keypad_height = (int)(KEYPAD_HEIGHT * keypad_scale);
+        
+        // Calculate keypad x position in fullscreen (left or right depending on fullscreen_overlay_on_left)
+        int keypad_x_workspace = fullscreen_overlay_on_left ? 0 : (WORKSPACE_WIDTH - scaled_keypad_width);
+        
+        // Re-initialize hotspots with new scale factor
+        init_overlay_hotspots(keypad_scale);
+        
+        // Store keypad y offset for rendering (used below)
+        int kp_y_offset = keypad_y_offset;
+        int kp_x_offset = keypad_x_workspace;
+        
         // Draw transparent overlay on right side in fullscreen mode (same as dual-screen layout)
         if (overlay_visible_in_fullscreen && overlay_buffer && overlay_width > 0 && overlay_height > 0)
         {
-            // First, render game-specific overlay with 40% transparency (drawn first, so it's underneath)
-            // Draw overlay at its position (left or right based on fullscreen_overlay_on_left flag)
-            int overlay_x_offset = (KEYPAD_WIDTH - overlay_width) / 2;
-            int overlay_x_workspace = fullscreen_overlay_on_left ? overlay_x_offset : (GAME_SCREEN_WIDTH + overlay_x_offset);
+            // Scale overlay and controller base based on keypad scale
+            int scaled_overlay_width = (int)(overlay_width * keypad_scale);
+            int scaled_overlay_height = (int)(overlay_height * keypad_scale);
+            int scaled_ctrl_base_width = (int)(controller_base_width * keypad_scale);
+            int scaled_ctrl_base_height = (int)(controller_base_height * keypad_scale);
             
-            // Render overlay with 40% transparency
-            for (int y = 0; y < overlay_height && y < WORKSPACE_HEIGHT; ++y) {
-                for (int x = 0; x < overlay_width; ++x) {
+            // First, render game-specific overlay with 40% transparency (drawn first, so it's underneath)
+            // Draw overlay at its position, centered within the scaled keypad area
+            int overlay_x_offset = (scaled_keypad_width - scaled_overlay_width) / 2;
+            int overlay_x_workspace = kp_x_offset + overlay_x_offset;
+            int overlay_y_offset = (scaled_keypad_height - scaled_overlay_height) / 2;
+            
+            // Render scaled overlay with 40% transparency using bilinear scaling
+            for (int y = 0; y < scaled_overlay_height && (kp_y_offset + overlay_y_offset + y) < WORKSPACE_HEIGHT; ++y) {
+                int src_y = (int)(y / keypad_scale);
+                if (src_y >= overlay_height) src_y = overlay_height - 1;
+                
+                for (int x = 0; x < scaled_overlay_width; ++x) {
+                    int src_x = (int)(x / keypad_scale);
+                    if (src_x >= overlay_width) src_x = overlay_width - 1;
+                    
                     int workspace_x = overlay_x_workspace + x;
-                    int workspace_y = y;
+                    int workspace_y = kp_y_offset + overlay_y_offset + y;
                     
                     if (workspace_x >= 0 && workspace_x < WORKSPACE_WIDTH && 
                         workspace_y >= 0 && workspace_y < WORKSPACE_HEIGHT) {
                         
-                        unsigned int overlay_pixel = overlay_buffer[y * overlay_width + x];
+                        unsigned int overlay_pixel = overlay_buffer[src_y * overlay_width + src_x];
                         unsigned int overlay_alpha = (overlay_pixel >> 24) & 0xFF;
                         
                         if (overlay_alpha > 0) {
@@ -716,19 +777,27 @@ static void render_dual_screen(void)
             // Then, render controller_base template on top (drawn last, so it's on top)
             if (controller_base_loaded && controller_base && controller_base_width > 0 && controller_base_height > 0)
             {
-                // Draw controller_base at its position (left or right based on fullscreen_overlay_on_left flag)
-                int ctrl_base_x_offset = (KEYPAD_WIDTH - controller_base_width) / 2;
-                int ctrl_base_x_workspace = fullscreen_overlay_on_left ? ctrl_base_x_offset : (GAME_SCREEN_WIDTH + ctrl_base_x_offset);
+                // Draw controller_base at its position, centered within the scaled keypad area
+                int ctrl_base_x_offset = (scaled_keypad_width - scaled_ctrl_base_width) / 2;
+                int ctrl_base_x_workspace = kp_x_offset + ctrl_base_x_offset;
+                int ctrl_base_y_offset = (scaled_keypad_height - scaled_ctrl_base_height) / 2;
                 
-                for (int y = 0; y < controller_base_height && y < WORKSPACE_HEIGHT; ++y) {
-                    for (int x = 0; x < controller_base_width; ++x) {
+                // Render scaled controller base with 40% transparency
+                for (int y = 0; y < scaled_ctrl_base_height && (kp_y_offset + ctrl_base_y_offset + y) < WORKSPACE_HEIGHT; ++y) {
+                    int src_y = (int)(y / keypad_scale);
+                    if (src_y >= controller_base_height) src_y = controller_base_height - 1;
+                    
+                    for (int x = 0; x < scaled_ctrl_base_width; ++x) {
+                        int src_x = (int)(x / keypad_scale);
+                        if (src_x >= controller_base_width) src_x = controller_base_width - 1;
+                        
                         int workspace_x = ctrl_base_x_workspace + x;
-                        int workspace_y = y;
+                        int workspace_y = kp_y_offset + ctrl_base_y_offset + y;
                         
                         if (workspace_x >= 0 && workspace_x < WORKSPACE_WIDTH && 
                             workspace_y >= 0 && workspace_y < WORKSPACE_HEIGHT) {
                             
-                            unsigned int base_pixel = controller_base[y * controller_base_width + x];
+                            unsigned int base_pixel = controller_base[src_y * controller_base_width + src_x];
                             unsigned int base_alpha = (base_pixel >> 24) & 0xFF;
                             
                             if (base_alpha > 0) {
@@ -775,10 +844,10 @@ static void render_dual_screen(void)
             // Draw utility buttons in the strip
             // Show 3 buttons in fullscreen mode: Exit (Button 0), Show Overlay (Button 7), and Toggle Layout (Button 2)
             // Position them at: 1/4, 1/2, and 3/4 of workspace width
-            int button_y = strip_y + (FULLSCREEN_STRIP_HEIGHT - MENU_BUTTON_HEIGHT) / 2;
+            button_y_pos = strip_y + (FULLSCREEN_STRIP_HEIGHT - MENU_BUTTON_HEIGHT) / 2;
+            int button_y = button_y_pos;  // Local reference to static variable for convenience
             
             // Button positions for fullscreen strip (3 buttons evenly spaced)
-            int button_x_pos[3];
             button_x_pos[0] = (WORKSPACE_WIDTH / 4) - (MENU_BUTTON_WIDTH / 2);        // 1/4 - Exit
             button_x_pos[1] = (WORKSPACE_WIDTH / 2) - (MENU_BUTTON_WIDTH / 2);        // 1/2 - Toggle Layout
             button_x_pos[2] = (3 * WORKSPACE_WIDTH / 4) - (MENU_BUTTON_WIDTH / 2);    // 3/4 - Show Overlay
@@ -1027,7 +1096,7 @@ static void render_dual_screen(void)
             if (utility_button_pressed[0]) {
                 unsigned int highlight_color = 0x88FFFF00;
                 int btn_x = button_x_pos[0];
-                for (int y = button_y; y < button_y + MENU_BUTTON_HEIGHT; ++y) {
+                for (int y = button_y_pos; y < button_y_pos + MENU_BUTTON_HEIGHT; ++y) {
                     if (y >= WORKSPACE_HEIGHT) break;
                     for (int x = btn_x; x < btn_x + MENU_BUTTON_WIDTH; ++x) {
                         if (x >= 0 && x < WORKSPACE_WIDTH) {
@@ -1058,7 +1127,7 @@ static void render_dual_screen(void)
             if (utility_button_pressed[2]) {
                 unsigned int highlight_color = 0x88FFFF00;
                 int btn_x = button_x_pos[1];
-                for (int y = button_y; y < button_y + MENU_BUTTON_HEIGHT; ++y) {
+                for (int y = button_y_pos; y < button_y_pos + MENU_BUTTON_HEIGHT; ++y) {
                     if (y >= WORKSPACE_HEIGHT) break;
                     for (int x = btn_x; x < btn_x + MENU_BUTTON_WIDTH; ++x) {
                         if (x >= 0 && x < WORKSPACE_WIDTH) {
@@ -1089,7 +1158,7 @@ static void render_dual_screen(void)
             if (utility_button_pressed[7]) {
                 unsigned int highlight_color = 0x88FFFF00;
                 int btn_x = button_x_pos[2];
-                for (int y = button_y; y < button_y + MENU_BUTTON_HEIGHT; ++y) {
+                for (int y = button_y_pos; y < button_y_pos + MENU_BUTTON_HEIGHT; ++y) {
                     if (y >= WORKSPACE_HEIGHT) break;
                     for (int x = btn_x; x < btn_x + MENU_BUTTON_WIDTH; ++x) {
                         if (x >= 0 && x < WORKSPACE_WIDTH) {
@@ -1123,7 +1192,51 @@ static void render_dual_screen(void)
                 dual_buffer[(WORKSPACE_HEIGHT - 1) * WORKSPACE_WIDTH + x] = border_color;
             }
 
-
+        }
+        
+        // === HOTSPOT HIGHLIGHTING IN FULLSCREEN - Show which buttons are pressed by touch ===
+        // Highlight all pressed hotspots (from touch input detection)
+        for (int i = 0; i < OVERLAY_HOTSPOT_COUNT; i++) {
+            if (hotspot_pressed[i]) {
+                overlay_hotspot_t *h = &overlay_hotspots[i];
+                unsigned int highlight_color = 0x6600FF00;  // Green highlight for touch-pressed, 40% transparency to match keypad overlay
+                
+                // Calculate absolute workspace coordinates for this hotspot
+                int abs_hotspot_x, abs_hotspot_y;
+                int hotspot_width = h->width;
+                int hotspot_height = h->height;
+                
+                // Fullscreen mode: hotspots relative to scaled keypad
+                int scaled_keypad_w = (int)(KEYPAD_WIDTH * keypad_scale_factor);
+                int keypad_x_workspace = fullscreen_overlay_on_left ? 0 : (WORKSPACE_WIDTH - scaled_keypad_w);
+                abs_hotspot_x = keypad_x_workspace + h->x;
+                abs_hotspot_y = 0 + h->y;  // In fullscreen, keypad Y starts at 0 (no offset)
+                
+                for (int y = abs_hotspot_y; y < abs_hotspot_y + hotspot_height; ++y) {
+                    if (y >= WORKSPACE_HEIGHT) continue;
+                    for (int x = abs_hotspot_x; x < abs_hotspot_x + hotspot_width; ++x) {
+                        if (x < 0 || x >= WORKSPACE_WIDTH) continue;
+                        
+                        unsigned int existing = dual_buffer[y * WORKSPACE_WIDTH + x];
+                        unsigned int alpha = (highlight_color >> 24) & 0xFF;
+                        unsigned int inv_alpha = 255 - alpha;
+                        
+                        unsigned int r = ((highlight_color >> 16) & 0xFF);
+                        unsigned int g = ((highlight_color >> 8) & 0xFF);
+                        unsigned int b = (highlight_color & 0xFF);
+                        
+                        unsigned int existing_r = ((existing >> 16) & 0xFF);
+                        unsigned int existing_g = ((existing >> 8) & 0xFF);
+                        unsigned int existing_b = (existing & 0xFF);
+                        
+                        unsigned int blended_r = (r * alpha + existing_r * inv_alpha) / 255;
+                        unsigned int blended_g = (g * alpha + existing_g * inv_alpha) / 255;
+                        unsigned int blended_b = (b * alpha + existing_b * inv_alpha) / 255;
+                        
+                        dual_buffer[y * WORKSPACE_WIDTH + x] = 0xFF000000 | (blended_r << 16) | (blended_g << 8) | blended_b;
+                    }
+                }
+            }
         }
         
         return;  // Done with fullscreen rendering
@@ -1451,26 +1564,37 @@ static void render_dual_screen(void)
     
     // === HOTSPOT HIGHLIGHTING - Show which buttons are pressed by touch ===
     // Highlight all pressed hotspots (from touch input detection)
-    // In dual-screen: when display_swap is true, hotspots translate from right side to left side
-    // In fullscreen: when fullscreen_overlay_on_left is true, hotspots translate from right side to left side
-    int hotspot_x_adjust = 0;
-    
-    if (fullscreen_mode) {
-        // Fullscreen mode: adjust based on overlay position
-        hotspot_x_adjust = fullscreen_overlay_on_left ? (-GAME_SCREEN_WIDTH) : 0;
-    } else {
-        // Dual-screen mode: adjust based on keypad position
-        hotspot_x_adjust = display_swap ? (-GAME_SCREEN_WIDTH) : 0;
-    }
+    // Hotspots are stored relative to keypad area; must convert to workspace coordinates
+    // In dual-screen: keypad on right at GAME_SCREEN_WIDTH (or left if swapped)
+    // In fullscreen: keypad position calculated from scaling
     
     for (int i = 0; i < OVERLAY_HOTSPOT_COUNT; i++) {
         if (hotspot_pressed[i]) {
             overlay_hotspot_t *h = &overlay_hotspots[i];
-            unsigned int highlight_color = 0xAA00FF00;  // Green highlight for touch-pressed
+            unsigned int highlight_color = 0x6600FF00;  // Green highlight for touch-pressed, 40% transparency to match keypad overlay
             
-            for (int y = h->y; y < h->y + h->height; ++y) {
+            // Calculate absolute workspace coordinates for this hotspot
+            int abs_hotspot_x, abs_hotspot_y;
+            int hotspot_width = h->width;
+            int hotspot_height = h->height;
+            
+            if (fullscreen_mode) {
+                // Fullscreen mode: hotspots relative to scaled keypad
+                int scaled_keypad_w = (int)(KEYPAD_WIDTH * keypad_scale_factor);
+                int keypad_x_workspace = fullscreen_overlay_on_left ? 0 : (WORKSPACE_WIDTH - scaled_keypad_w);
+                abs_hotspot_x = keypad_x_workspace + h->x;
+                abs_hotspot_y = 0 + h->y;  // In fullscreen, keypad Y starts at 0 (no offset)
+            } else {
+                // Dual-screen mode: hotspots relative to keypad area
+                // Keypad is at GAME_SCREEN_WIDTH when not swapped, at 0 when swapped
+                int keypad_x_workspace = display_swap ? 0 : GAME_SCREEN_WIDTH;
+                abs_hotspot_x = keypad_x_workspace + h->x;
+                abs_hotspot_y = h->y;  // Y is already absolute
+            }
+            
+            for (int y = abs_hotspot_y; y < abs_hotspot_y + hotspot_height; ++y) {
                 if (y >= WORKSPACE_HEIGHT) continue;
-                for (int x = h->x + hotspot_x_adjust; x < h->x + h->width + hotspot_x_adjust; ++x) {
+                for (int x = abs_hotspot_x; x < abs_hotspot_x + hotspot_width; ++x) {
                     if (x < 0 || x >= WORKSPACE_WIDTH) continue;
                     
                     unsigned int existing = dual_buffer[y * WORKSPACE_WIDTH + x];
@@ -1582,10 +1706,10 @@ static void process_utility_button_input(void)
             {
                 // Process button clicks in fullscreen strip
                 int strip_y = WORKSPACE_HEIGHT - FULLSCREEN_STRIP_HEIGHT;
-                int button_y = strip_y + (FULLSCREEN_STRIP_HEIGHT - MENU_BUTTON_HEIGHT) / 2;
+                button_y_pos = strip_y + (FULLSCREEN_STRIP_HEIGHT - MENU_BUTTON_HEIGHT) / 2;
+                int button_y = button_y_pos;  // Local reference
                 
                 // Button positions for fullscreen strip (3 buttons evenly spaced)
-                int button_x_pos[3];
                 button_x_pos[0] = (WORKSPACE_WIDTH / 4) - (MENU_BUTTON_WIDTH / 2);        // 1/4 - Exit
                 button_x_pos[1] = (WORKSPACE_WIDTH / 2) - (MENU_BUTTON_WIDTH / 2);        // 1/2 - Swap
                 button_x_pos[2] = (3 * WORKSPACE_WIDTH / 4) - (MENU_BUTTON_WIDTH / 2);    // 3/4 - Show Overlay
@@ -1606,7 +1730,10 @@ static void process_utility_button_input(void)
                         fullscreen_strip_visible = 0;
                         fullscreen_hide_timer = 0;
                         
-                        debug_log("[FULLSCREEN_BUTTON] Button 0 (Exit fullscreen) pressed");
+                        // Reinitialize hotspots for the mode we're entering (now exiting fullscreen, so dual-screen)
+                        init_overlay_hotspots(1.0f);  // Dual-screen always uses 1.0 scale
+                        
+                        debug_log("[FULLSCREEN_BUTTON] Button 0 (Exit fullscreen) pressed, exiting to dual-screen");
                     }
                 }
                 else
@@ -1683,13 +1810,25 @@ static void process_utility_button_input(void)
             utility_button_pressed[7] = 0;
         }
         
-        return;  // Don't process hotspots in fullscreen mode
+        // Process hotspots in fullscreen if overlay is visible
+        if (overlay_visible_in_fullscreen) {
+            // Fall through to hotspot processing below for fullscreen with overlay visible
+        } else {
+            return;  // Don't process hotspots if overlay is hidden in fullscreen
+        }
+    }
+    else
+    {
+        // We're in dual-screen mode - process dual-screen utility buttons below
     }
     
     // =========================================
     // DUAL-SCREEN MODE UTILITY BUTTON PROCESSING
     // =========================================
-    // Track pressed buttons
+    // Only process dual-screen buttons if NOT in fullscreen mode
+    if (!fullscreen_mode)
+    {
+        // Track pressed buttons
     for (int i = 0; i < UTILITY_BUTTON_COUNT; i++)
     {
         // Only process buttons 0 (Fullscreen) and 2 (Swap) in dual-screen mode
@@ -1727,10 +1866,16 @@ static void process_utility_button_input(void)
                             // Entering fullscreen - show strip initially
                             fullscreen_strip_visible = 1;
                             fullscreen_hide_timer = FULLSCREEN_HIDE_DELAY;
+                            // Calculate scale factor for fullscreen with visible strip
+                            int game_height = WORKSPACE_HEIGHT - FULLSCREEN_STRIP_HEIGHT;
+                            float scale = (float)game_height / KEYPAD_HEIGHT;
+                            init_overlay_hotspots(scale);
                         } else {
                             // Exiting fullscreen - hide strip
                             fullscreen_strip_visible = 0;
                             fullscreen_hide_timer = 0;
+                            // Reinitialize hotspots for dual-screen (always 1.0 scale)
+                            init_overlay_hotspots(1.0f);
                         }
                         break;
                     case 2:  // Toggle layout button
@@ -1750,6 +1895,7 @@ static void process_utility_button_input(void)
             }
         }
     }
+    }  // End of !fullscreen_mode block
 }
 
 // Process hotspot input and update controller state directly
@@ -1791,35 +1937,41 @@ static void process_hotspot_input(void)
         
         // Calculate hotspot position based on display mode and overlay position
         int hotspot_x = h->x;
+        int hotspot_y = h->y;
+        int hotspot_width = h->width;
+        int hotspot_height = h->height;
         
         if (fullscreen_mode)
         {
-            // FULLSCREEN MODE: Overlay can be on LEFT or RIGHT
-            // Hotspots are defined with overlay on RIGHT (x starts at 704), so translate if on LEFT
-            // In fullscreen normal: overlay on RIGHT, hotspot at original x position
-            // In fullscreen swapped: overlay on LEFT, subtract GAME_SCREEN_WIDTH (704) to move to LEFT side
-            if (fullscreen_overlay_on_left) {
-                // Translate hotspot from RIGHT side to LEFT side
-                // Original x is ~750-883 (right side), new x should be ~46-179 (left side, same relative position)
-                hotspot_x = h->x - GAME_SCREEN_WIDTH;
-            }
+            // FULLSCREEN MODE: Hotspots are stored relative to keypad area
+            // Need to translate them to actual workspace coordinates
+            
+            // Calculate the scaled keypad's position and dimensions
+            int scaled_keypad_w = (int)(KEYPAD_WIDTH * keypad_scale_factor);
+            int scaled_keypad_h = (int)(KEYPAD_HEIGHT * keypad_scale_factor);
+            
+            // Keypad position in fullscreen (left or right depending on fullscreen_overlay_on_left)
+            int keypad_x_workspace = fullscreen_overlay_on_left ? 0 : (WORKSPACE_WIDTH - scaled_keypad_w);
+            int keypad_y_workspace = 0;  // Always at top in fullscreen
+            
+            // Convert hotspot positions from keypad-relative to workspace-absolute
+            hotspot_x = keypad_x_workspace + h->x;
+            hotspot_y = keypad_y_workspace + h->y;
         }
         else
         {
-            // DUAL-SCREEN MODE: Keypad can be on LEFT or RIGHT based on display_swap
-            // Hotspots are defined with keypad on RIGHT (x starts at 704), so translate them
-            // In normal mode: hotspot at original x position
-            // In swapped mode: subtract GAME_SCREEN_WIDTH (704) to move to LEFT side
-            if (display_swap) {
-                // Translate hotspot from RIGHT side to LEFT side
-                // Original x is ~750-883 (right side), new x should be ~46-179 (left side, same relative position)
-                hotspot_x = h->x - GAME_SCREEN_WIDTH;
-            }
+            // DUAL-SCREEN MODE: Hotspots are stored relative to keypad area
+            // Keypad is on RIGHT side at GAME_SCREEN_WIDTH
+            // Need to add the base offset to make them absolute workspace coordinates
+            int keypad_x_workspace = display_swap ? 0 : GAME_SCREEN_WIDTH;
+            
+            hotspot_x = keypad_x_workspace + h->x;
+            hotspot_y = h->y;  // Y is already absolute
         }
         
         // Check if mouse is over this hotspot
-        int is_over = (mouse_x >= hotspot_x && mouse_x < hotspot_x + h->width &&
-                       mouse_y >= h->y && mouse_y < h->y + h->height);
+        int is_over = (mouse_x >= hotspot_x && mouse_x < hotspot_x + hotspot_width &&
+                       mouse_y >= hotspot_y && mouse_y < hotspot_y + hotspot_height);
         
         if (is_over && mouse_button)
         {
@@ -2052,7 +2204,7 @@ bool retro_load_game(const struct retro_game_info *info)
 		load_controller_base();
 		load_utility_buttons();
 		load_overlay_for_rom(info->path);
-		init_overlay_hotspots();
+		init_overlay_hotspots(1.0f);  // Initialize with normal scale (1.0 = full size)
 	} else {
 		printf("[GAME] ERROR: SystemPath is NULL or empty!\n");
 	}
