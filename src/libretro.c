@@ -894,8 +894,8 @@ static void render_dual_screen(void)
             
             // === PIN BUTTON on far left ===
             // Small circle button to toggle auto-hide behavior
-            int pin_radius = 8;  // Small circle
-            int pin_x = pin_radius + 10;  // 10 pixels from left edge
+            int pin_radius = 11;  // Increased from 8 for better visibility and touch
+            int pin_x = pin_radius + 12;  // 12 pixels from left edge
             int pin_y = strip_y + (FULLSCREEN_STRIP_HEIGHT / 2);  // Centered vertically in strip
             unsigned int pin_outline_color = 0xFFFFFFFF;  // White outline
             unsigned int pin_fill_color = 0xFF00FF00;    // Green fill when pinned
@@ -924,9 +924,9 @@ static void render_dual_screen(void)
             // === OPACITY DOTS on far right ===
             // 5 small circles for opacity adjustment: 20%, 40%, 60%, 80%, 100%
             int opacity_values[5] = {20, 40, 60, 80, 100};
-            int dot_radius = 5;
-            int dot_spacing = 14;  // Space between dots
-            int dots_start_x = WORKSPACE_WIDTH - (5 * dot_spacing) - 10;  // 10 pixels from right edge
+            int dot_radius = 10;  // Increased from 8 for better visibility and touch
+            int dot_spacing = 22;  // Increased from 18 to accommodate larger dots
+            int dots_start_x = WORKSPACE_WIDTH - (5 * dot_spacing) - 18;  // 18 pixels from right edge
             int dots_y = strip_y + (FULLSCREEN_STRIP_HEIGHT / 2);
             
             for (int i = 0; i < 5; i++) {
@@ -1831,15 +1831,15 @@ static void process_utility_button_input(void)
                 
                 // Check PIN BUTTON first (far left)
                 static int pin_button_pressed = 0;  // Moved outside if/else to track state correctly
-                int pin_radius = 8;
-                int pin_x = pin_radius + 10;  // 10 pixels from left edge
+                int pin_radius = 11;  // Increased from 8 for better visibility and touch
+                int pin_x = pin_radius + 12;  // 12 pixels from left edge
                 int pin_y = strip_y + (FULLSCREEN_STRIP_HEIGHT / 2);
                 
                 int dx = mouse_x - pin_x;
                 int dy = mouse_y - pin_y;
                 int dist_sq = dx * dx + dy * dy;
                 
-                if (dist_sq <= (pin_radius + 2) * (pin_radius + 2))  // Touch area slightly larger than visual
+                if (dist_sq <= (pin_radius + 3) * (pin_radius + 3))  // Larger touch area
                 {
                     if (!pin_button_pressed)
                     {
@@ -1856,9 +1856,9 @@ static void process_utility_button_input(void)
                 
                 // Check OPACITY DOTS (far right)
                 int opacity_values[5] = {20, 40, 60, 80, 100};
-                int dot_radius = 5;
-                int dot_spacing = 14;
-                int dots_start_x = WORKSPACE_WIDTH - (5 * dot_spacing) - 10;
+                int dot_radius = 10;  // Increased from 8 for better visibility and touch
+                int dot_spacing = 22;  // Increased from 18 to accommodate larger dots
+                int dots_start_x = WORKSPACE_WIDTH - (5 * dot_spacing) - 18;  // 18 pixels from right edge
                 int dots_y = strip_y + (FULLSCREEN_STRIP_HEIGHT / 2);
                 
                 static int last_opacity_dot_index = -1;  // Track which dot was last pressed (-1 = none)
@@ -1871,7 +1871,7 @@ static void process_utility_button_input(void)
                     int dy_dot = mouse_y - dots_y;
                     int dist_sq_dot = dx_dot * dx_dot + dy_dot * dy_dot;
                     
-                    if (dist_sq_dot <= (dot_radius + 3) * (dot_radius + 3)) {  // Touch area slightly larger
+                    if (dist_sq_dot <= (dot_radius + 5) * (dot_radius + 5)) {  // Larger touch area for bigger dots
                         current_dot_hit = i;
                         break;
                     }
