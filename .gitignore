@@ -1,3 +1,6 @@
 *.o
 *.dylib
-
+*.dll
+*.so
+libs/
+obj/
